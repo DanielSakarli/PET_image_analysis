@@ -18,27 +18,36 @@ from scipy import ndimage
 from matplotlib.colors import Normalize
 import pickle
 
+
 # Initialize global variables
 rgb_image = None
 rois = None
 roi_pixels = None
+roi_masks = []
 # Global variables to maintain state across multiple DICOM folder additions
 iteration_count = 0
 # Initialize an array to store the recovery coefficients
 recovery_coefficients = []
+# Initialize global variables
+dicom_images = []  # List to store DICOM images
+current_index = 0  # Current slice index
 
 
 # Function to load DICOM images from a directory
 def load_dicom_images(directory):
+    global dicom_images
     dicom_images = []
     for filename in os.listdir(directory):
         filepath = os.path.join(directory, filename)
         dicom_image = pydicom.dcmread(filepath)
         dicom_images.append(dicom_image)
+
+    #print(f"Pixel array of dicom images in load_dicom_images: {dicom_images[0].pixel_array}")
+    #print(f"Five maximal values of the 62nd DICOM image: {np.sort(dicom_images[61].pixel_array.flatten())[-5:]}")
     return dicom_images
 
-def display_dicom_image(dicom_image, canvas, ax, rois=None, roi_pixels=None, voi_masks=None):
-    global rgb_image
+def display_dicom_image(dicom_image, canvas, ax, rois=None, roi_pixels=None):
+    global rgb_image, roi_masks
 
     ax.clear()
     # print("Displaying image with ROIs:", roi_pixels)
@@ -57,24 +66,33 @@ def display_dicom_image(dicom_image, canvas, ax, rois=None, roi_pixels=None, voi
     rgb_image = plt.cm.gray(normalized_img)[:, :, :3]  # Discard alpha channel from grayscale to RGB conversion
 
 
-    # Display VOIs from isocontour detection
-    voi_color = [0, 1, 1]  # Cyan color for VOI
-    if voi_masks:
-        for mask in voi_masks:
-            rgb_image[mask] = voi_color
-
-    if roi_pixels is not None:
+    # Display ROIs from isocontour detection
+    roi_color = [0, 1, 1]  # Cyan color for VOI
+    if roi_masks:
+        for mask in roi_masks:
+            rgb_image[mask] = roi_color
+    
+    if roi_pixels:
+        # Ensure roi_pixels is a list of tuples
+        if isinstance(roi_pixels, np.ndarray):
+            roi_pixels = list(map(tuple, roi_pixels))
         # Set ROI pixels to red
-        for roi in roi_pixels:
-            for (x, y) in roi:
-                if 0 <= x < img_array.shape[0] and 0 <= y < img_array.shape[1]:
-                    rgb_image[x, y] = [1, 0, 0]  # Red color for ROI pixels
-
-        if False:
+        for (x, y) in roi_pixels:
+            if 0 <= x < img_array.shape[0] and 0 <= y < img_array.shape[1]:
+                rgb_image[x, y] = [1, 0, 0]  # Red color for ROI pixels
+    if False:
+        if roi_pixels is not None:
             # Set ROI pixels to red
-            for (x, y) in roi_pixels:
-                if 0 <= x < img_array.shape[0] and 0 <= y < img_array.shape[1]:
-                    rgb_image[x, y] = [1, 0, 0]  # Red color in RGB
+            for roi in roi_pixels:
+                for (x, y) in roi:
+                    if 0 <= x < img_array.shape[0] and 0 <= y < img_array.shape[1]:
+                        rgb_image[x, y] = [1, 0, 0]  # Red color for ROI pixels
+
+            if False:
+                # Set ROI pixels to red
+                for (x, y) in roi_pixels:
+                    if 0 <= x < img_array.shape[0] and 0 <= y < img_array.shape[1]:
+                        rgb_image[x, y] = [1, 0, 0]  # Red color in RGB
 
     # Define a list of colors for the ROIs
     colors = [
@@ -269,7 +287,7 @@ def background_variability(current_index):
     for row_idx, row in enumerate(mean_values):
         for col_idx, col in enumerate(row):
             if col is not None and final_mean_values[col_idx] is not None:
-                sum_squared_differences[col_idx] += (col - final_mean_values[col_idx]) ** 2
+                sum_squared_differences[col_idx] += (np.mean(col) - final_mean_values[col_idx]) ** 2
 
     # Print the sum of squared differences for each column
     for col in range(6):
@@ -303,6 +321,8 @@ def select_slice():
     selected_slice = dicom_images[current_index]
     save_selected_slice(selected_slice)
     background_variability(current_index)
+    process_rois_for_predefined_centers()
+    suv_peak_with_spherical_voi()
 
 # Function to save the selected DICOM slice
 def save_selected_slice(dicom_image):
@@ -351,8 +371,6 @@ def apply_threshold():
     # Display the updated image with ROI pixels highlighted
     display_dicom_image(dicom_images[current_index], canvas, ax, rois, roi_pixels)
 
-import numpy as np
-from scipy.ndimage import label, generate_binary_structure
 
 def get_max_value(img_array, center, radius):
     """ Extract the maximum value within a spherical ROI """
@@ -364,8 +382,153 @@ def get_max_value(img_array, center, radius):
                 max_value = max(max_value, img_array[x, y])
     return max_value
 
+def get_mean_value(image_stack, mask):
+    """
+    Calculate the mean value of the pixel values within the mask.
+    image_stack: 3D image stack.
+    mask: 3D boolean mask.
+    """
+    return np.mean(image_stack[mask])
+
+def suv_peak_with_spherical_voi():
+    global current_index, dicom_images, roi_masks
+
+    radius_mm = 6.204  # Sphere radius in mm for a 1 mL 3D sphere
+    dicom_image = dicom_images[current_index]
+    
+    # Read in the pixel size of the DICOM image
+    pixel_spacing = dicom_image[0x0028, 0x0030].value
+    # Extract slice_thickness using the DICOM tag's hexadecimal code
+    slice_thickness = dicom_image[0x0018, 0x0050].value
+    # Calculate the radius in pixels (assuming isotropic pixels)
+    radius_pixels = radius_mm / pixel_spacing[0]   
+    # Determine the number of slices the sphere covers
+    num_slices = int(np.ceil(2 * radius_mm / slice_thickness))
+    
+    print(f"Number of pixels equalling radius of 6.204 mm sphere: {radius_pixels:.2f}, Number of slices the sphere covers: {num_slices}")
+
+    mean_values = []
+    positions = []  # To save the sphere centers that give valid results
+    image_stack = build_image_stack()
+    
+    # Convert roi_masks to a NumPy array
+    roi_masks_array = np.array(roi_masks)
+
+    print(f"Shape of image stack: {image_stack.shape}")
+    print(f"roi_masks shape: {roi_masks_array.shape}")
+    print(f"roi_masks content: {roi_masks_array}")
+    # Assume roi_mask is a boolean 3D array
+    for index in np.argwhere(roi_masks):
+        print("I am here")
+        if can_place_sphere(index, radius_pixels):
+            print(f"Valid sphere center: {index}")
+            mask = create_3d_spherical_mask(index, radius_pixels, image_stack.shape)
+            print(f"Mask created by create_3d_spherical_mask: {mask}")
+            mean_value = get_mean_value(image_stack, mask)
+            print(f"SUV_peak: Mean value: {mean_value} at position {index}")
+            mean_values.append(mean_value)
+            positions.append(index)
+    
+    # Identify the maximum mean value
+    max_index = np.argmax(mean_values)
+    max_mean_value = mean_values[max_index]
+    max_position = positions[max_index]
+    
+    print(f"SUV_peak: Max mean value: {max_mean_value} at position {max_position}")
+    return max_mean_value, max_position
+
+def can_place_sphere(center, radius_pixels):
+    """
+    Check if a sphere with given radius can be placed within the 2D ROI.
+    center: (x_center, y_center) - Center of the sphere in the 2D image.
+    radius_pixels: Radius of the sphere in pixels.
+    roi_mask: 2D boolean array where True values indicate the ROI.
+    """
+    global roi_masks
+
+    z_center, y_center, x_center = center
+    
+    # Convert roi_masks to a NumPy array
+    roi_masks_array = np.array(roi_masks)
+    depth, height, width = roi_masks_array.shape
+    if False:
+        # Check if all points within the sphere's radius are within the ROI and image boundaries
+        for y in range(max(0, int(y_center - radius_pixels)), min(height, int(y_center + radius_pixels) + 1)):
+            for x in range(max(0, int(x_center - radius_pixels)), min(width, int(x_center + radius_pixels) + 1)):
+                if (x - x_center)**2 + (y - y_center)**2 <= radius_pixels**2:
+                    if not roi_masks[y, x]:  # Check if the point is outside the ROI
+                        return False
+    print(f"depth: {depth}, height: {height}, width: {width} z_center: {z_center}, y_center: {y_center}, x_center: {x_center}, radius_pixels: {radius_pixels}")
+    # Check if the sphere fits within the bounds of the 3D ROI
+    if (x_center - radius_pixels >= 0 and x_center + radius_pixels < height and
+        y_center - radius_pixels >= 0 and y_center + radius_pixels < width):
+        return True
+    else:
+        return False
+
+def create_3d_spherical_mask(center, radius_pixels, shape):
+    """
+    Creates a 3D mask with a spherical region set to True.
+
+    Parameters:
+    - center: Tuple of (z, y, x), the center of the sphere in 3D coordinates.
+    - radius_pixels: The radius of the sphere in pixels.
+    - shape: Tuple of (depth, height, width), the dimensions of the 3D array.
+
+    Returns:
+    - A 3D numpy array of the same shape as the input dimensions, with the spherical region set to True.
+    """
+    # Create an empty 3D array of the specified shape
+    mask = np.zeros(shape, dtype=bool)
+    
+    # Get each dimension's size and center coordinates
+    z_center, y_center, x_center = center
+    depth, height, width = shape
+
+    # Create ranges for each dimension
+    z_range = np.arange(depth)
+    y_range = np.arange(height)
+    x_range = np.arange(width)
+
+    # Calculate the squared radius for comparison
+    radius_squared = radius_pixels ** 2
+
+    # Meshgrids for the coordinates
+    Z, Y, X = np.meshgrid(z_range, y_range, x_range, indexing='ij', sparse=True)
+
+    # Calculate the squared distance from the center to each point
+    distance_squared = (Z - z_center)**2 + (Y - y_center)**2 + (X - x_center)**2
+
+    # Fill the mask where the distance squared is less than or equal to the radius squared
+    mask[distance_squared <= radius_squared] = True
+
+    return mask
+
+def build_image_stack():
+    global dicom_images
+    #print(f"Content of dicom_images: {dicom_images}")
+    #print(f"Pixel array of the first DICOM image: {dicom_images[0].pixel_array}")
+    #print(f"Pixel array of the 50th DICOM image: {dicom_images[49].pixel_array}")
+    # Ensure dicom_images is not None and contains elements
+    if dicom_images is None or len(dicom_images) == 0:
+        raise ValueError("dicom_images is not initialized or empty")
+
+    # Sort DICOM files by their acquisition number or another relevant attribute for correct sequence
+    try:
+        temp_data = sorted(dicom_images, key=lambda x: int(x.InstanceNumber))
+    except AttributeError as e:
+        raise ValueError("DICOM images do not have the expected attributes") from e
+
+    # Create a 3D numpy array from the DICOM pixel arrays
+    try:
+        image_stack = np.stack([ds.pixel_array for ds in temp_data])
+    except AttributeError as e:
+        raise ValueError("DICOM objects do not have pixel_array attribute") from e
+
+    return image_stack
+
 def create_isocontour_voi(img_array, center, radius, threshold):
-    """ Creates a binary mask for the isocontour VOI based on the threshold. """
+    """ Creates a binary mask for the isocontour ROI based on the threshold. """
     x_center, y_center = center
     mask = np.zeros_like(img_array, dtype=bool)
     # Rows (y coord.)
@@ -377,15 +540,17 @@ def create_isocontour_voi(img_array, center, radius, threshold):
                     mask[x, y] = True
     return mask
 
-def process_vois_for_predefined_centers():
+def process_rois_for_predefined_centers():
+    global roi_masks
     selected_slice = dicom_images[current_index].pixel_array
+    print(f"Selected slice: {selected_slice}")
     # Centers of the 6 spheres with a 344x344 image size, increasing sphere sizes
     # centers = [(200, 165), (189, 190), (160, 194), (144, 171), (154, 146), (183, 142)] 
     # Centers of the 6 spheres with a 512x512 image size, increasing sphere sizes
     centers = [(210, 271), (217, 228), (257, 214), (287, 242), (280, 282), (242, 298)]
     
     radius = 15  # Covers even the biggest sphere with a radius of 18.5 pixels (times approx. 2 mm pixel_spacing = 37 mm sphere)
-    vois = []
+    roi_masks = []
     # roi_pixels = []  # Initialize roi_pixels as an empty list
 
 
@@ -397,16 +562,16 @@ def process_vois_for_predefined_centers():
         #])
         true_activity = 28136.08 #Calculated the theoretical activity at scan start (Daniel, 10. Oct. 2024 12:22 pm)
         threshold = 0.4 * true_activity #local_max
-        voi_mask = create_isocontour_voi(selected_slice, center, radius, threshold)
-        print(f"VOI {len(vois) + 1} - Threshold: {threshold:.2f}, Max Value: {true_activity:.2f}, Number of Pixels: {np.sum(voi_mask)}")
-        vois.append(voi_mask)
-        
+        roi_mask_temp = create_isocontour_voi(selected_slice, center, radius, threshold)
+        print(f"VOI {len(roi_masks) + 1} - Threshold: {threshold:.2f}, Max Value: {true_activity:.2f}, Number of Pixels: {np.sum(roi_mask_temp)}")
+        roi_masks.append(roi_mask_temp)
+    print(f"roi_masks: {roi_masks}")
         # Create circular ROI and extract coordinate pairs to see if the radius of the max value search and the ROIs in which the max value is searched is correct
         #rr, cc = np.ogrid[:selected_slice.shape[0], :selected_slice.shape[1]]
         #circle_mask = (rr - center[0])**2 + (cc - center[1])**2 <= radius**2
         #roi_coords = np.column_stack(np.where(circle_mask))
         #roi_pixels.append(roi_coords)
-    display_dicom_image(selected_slice, canvas, ax, voi_masks=vois)
+    display_dicom_image(selected_slice, canvas, ax)
     #display_dicom_image(selected_slice, canvas, ax, roi_pixels=roi_pixels)
   
     if False:
@@ -425,21 +590,21 @@ def process_vois_for_predefined_centers():
     # Initialize an array to store the mean values of the different VOIs
     mean_values = []
 
-    # Calculate the mean values of the different VOIs
-    for i, voi in enumerate(vois):
-        mean_value = np.mean(selected_slice[voi])
-        num_pixels = np.sum(voi)
+    # Calculate the mean values of the different ROIs
+    for i, roi_in_roi_masks in enumerate(roi_masks):
+        mean_value = np.mean(selected_slice[roi_in_roi_masks])
+        num_pixels = np.sum(roi_in_roi_masks)
         mean_values.append(mean_value)
         print(f"Mean value for VOI {i + 1}: {mean_value:.2f}")
         print(f"Number of pixels in VOI {i + 1}: {num_pixels}")
 
     # Calculate the max value from the very first VOI (i.e. the 37 mm sphere)
-    max_value = true_activity #np.mean(selected_slice[vois[5]])
+    max_value = true_activity #np.mean(selected_slice[roi_masks[5]])
     print(f"Max value from the biggest VOI: {max_value:.2f}")
 
     
 
-    # Calculate the recovery coefficient of the different VOIs using the stored mean values
+    # Calculate the recovery coefficient of the different ROIs using the stored mean values
     for i, mean_value in enumerate(mean_values):
         recovery_coefficient = mean_value / max_value
         recovery_coefficients.append(recovery_coefficient)
@@ -450,7 +615,7 @@ def process_vois_for_predefined_centers():
     #if len(voi_sizes) != len(recovery_coefficients):
     #    raise ValueError("The length of VOI numbers does not match the length of recovery coefficients.")
 
-    return vois
+    return roi_masks
 
 
 def draw_plot():
@@ -560,7 +725,7 @@ def create_gui():
     zoom_out_button.pack(side=tk.LEFT, padx=5, pady=10)
 
     # VOI Processing Button
-    process_voi_button = tk.Button(root, text="Isocontour detection", command=process_vois_for_predefined_centers)
+    process_voi_button = tk.Button(root, text="Isocontour detection", command=process_rois_for_predefined_centers)
     process_voi_button.pack(side=tk.LEFT, padx=20, pady=10)
 
     # Draw Plot Button
@@ -646,9 +811,6 @@ def create_gui():
     root.mainloop()
 
 if __name__ == "__main__":
-    # Initialize global variables
-    dicom_images = []  # List to store DICOM images
-    current_index = 0  # Current slice index
 
     # Create and launch the GUI
     create_gui()
