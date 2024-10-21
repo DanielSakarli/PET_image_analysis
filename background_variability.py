@@ -388,7 +388,21 @@ def get_mean_value(image_stack, mask):
     image_stack: 3D image stack.
     mask: 3D boolean mask.
     """
-    return np.mean(image_stack[mask])
+    global current_index
+    # Extract the z, y, and x coordinates from the mask
+    z_coords, y_coords, x_coords = np.where(mask)
+    
+    # Adjust the z coordinates by adding current_index
+    adjusted_z_coords = z_coords + current_index
+    
+    # Ensure the adjusted z coordinates are within bounds
+    adjusted_z_coords = np.clip(adjusted_z_coords, 0, image_stack.shape[0] - 1)
+    
+    # Extract the pixel values using the adjusted z, y, and x coordinates
+    pixel_values = image_stack[adjusted_z_coords, y_coords, x_coords]
+    
+    # Calculate and return the mean value of the pixel values
+    return np.mean(pixel_values)
 
 def suv_peak_with_spherical_voi():
     global current_index, dicom_images, roi_masks
@@ -418,24 +432,44 @@ def suv_peak_with_spherical_voi():
     print(f"roi_masks shape: {roi_masks_array.shape}")
     print(f"roi_masks content: {roi_masks_array}")
     # Assume roi_mask is a boolean 3D array
-    for index in np.argwhere(roi_masks):
-        print("I am here")
+
+    # Initialize a dictionary to store the maximum mean value for each z-coordinate
+    max_values_per_slice = {z: {'max_mean': 0, 'position': None} for z in range(image_stack.shape[0])}
+
+    # Loop through each index where roi_masks is True
+    for z, y, x in np.argwhere(roi_masks_array):
+        index = (z, y, x)
         if can_place_sphere(index, radius_pixels):
-            print(f"Valid sphere center: {index}")
             mask = create_3d_spherical_mask(index, radius_pixels, image_stack.shape)
-            print(f"Mask created by create_3d_spherical_mask: {mask}")
             mean_value = get_mean_value(image_stack, mask)
-            print(f"SUV_peak: Mean value: {mean_value} at position {index}")
-            mean_values.append(mean_value)
-            positions.append(index)
-    
-    # Identify the maximum mean value
-    max_index = np.argmax(mean_values)
-    max_mean_value = mean_values[max_index]
-    max_position = positions[max_index]
-    
-    print(f"SUV_peak: Max mean value: {max_mean_value} at position {max_position}")
-    return max_mean_value, max_position
+            if mean_value > max_values_per_slice[z]['max_mean']:
+                max_values_per_slice[z]['max_mean'] = mean_value
+                max_values_per_slice[z]['position'] = (y, x)  # Store the y, x position for the max value
+
+    # Print results for each slice
+    for z, details in max_values_per_slice.items():
+        print(f"Max mean value in slice {z}: {details['max_mean']} at position {details['position']}")
+
+    return max_values_per_slice
+    if False:
+        for index in np.argwhere(roi_masks):
+            print("I am here")
+            if can_place_sphere(index, radius_pixels):
+                print(f"Valid sphere center: {index}")
+                mask = create_3d_spherical_mask(index, radius_pixels, image_stack.shape)
+                #print(f"Mask created by create_3d_spherical_mask: {mask}")
+                mean_value = get_mean_value(image_stack, mask)
+                print(f"SUV_peak: Mean value: {mean_value} at position {index}")
+                mean_values.append(mean_value)
+                positions.append(index)
+            
+        # Identify the maximum mean value
+        max_index = np.argmax(mean_values)
+        max_mean_value = mean_values[max_index]
+        max_position = positions[max_index]
+            
+        print(f"SUV_peak: Max mean value: {max_mean_value} at position {max_position}")
+        return max_mean_value, max_position    
 
 def can_place_sphere(center, radius_pixels):
     """
@@ -468,41 +502,20 @@ def can_place_sphere(center, radius_pixels):
 
 def create_3d_spherical_mask(center, radius_pixels, shape):
     """
-    Creates a 3D mask with a spherical region set to True.
-
-    Parameters:
-    - center: Tuple of (z, y, x), the center of the sphere in 3D coordinates.
-    - radius_pixels: The radius of the sphere in pixels.
-    - shape: Tuple of (depth, height, width), the dimensions of the 3D array.
-
-    Returns:
-    - A 3D numpy array of the same shape as the input dimensions, with the spherical region set to True.
+    Create a 3D spherical mask.
+    center: (z_center, y_center, x_center) - Center of the sphere in the 3D image.
+    radius_pixels: Radius of the sphere in pixels.
+    num_slices: Number of slices the sphere covers.
+    shape: Shape of the 3D image stack.
     """
-    # Create an empty 3D array of the specified shape
-    mask = np.zeros(shape, dtype=bool)
-    
-    # Get each dimension's size and center coordinates
     z_center, y_center, x_center = center
     depth, height, width = shape
-
-    # Create ranges for each dimension
-    z_range = np.arange(depth)
-    y_range = np.arange(height)
-    x_range = np.arange(width)
-
-    # Calculate the squared radius for comparison
-    radius_squared = radius_pixels ** 2
-
-    # Meshgrids for the coordinates
-    Z, Y, X = np.meshgrid(z_range, y_range, x_range, indexing='ij', sparse=True)
-
-    # Calculate the squared distance from the center to each point
-    distance_squared = (Z - z_center)**2 + (Y - y_center)**2 + (X - x_center)**2
-
-    # Fill the mask where the distance squared is less than or equal to the radius squared
-    mask[distance_squared <= radius_squared] = True
-
+    
+    z, y, x = np.ogrid[:depth, :height, :width]
+    distance = np.sqrt((z - z_center)**2 + (y - y_center)**2 + (x - x_center)**2)
+    mask = distance <= radius_pixels
     return mask
+
 
 def build_image_stack():
     global dicom_images
@@ -529,15 +542,15 @@ def build_image_stack():
 
 def create_isocontour_voi(img_array, center, radius, threshold):
     """ Creates a binary mask for the isocontour ROI based on the threshold. """
-    x_center, y_center = center
+    y_center, x_center = center
     mask = np.zeros_like(img_array, dtype=bool)
     # Rows (y coord.)
     for y in range(max(0, int(y_center - radius)), min(img_array.shape[0], int(y_center + radius) + 1)):
         # Columns (x coord.)
         for x in range(max(0, int(x_center - radius)), min(img_array.shape[1], int(x_center + radius) + 1)):
             if (x - x_center) ** 2 + (y - y_center) ** 2 <= radius ** 2:
-                if img_array[x, y] >= threshold:
-                    mask[x, y] = True
+                if img_array[y, x] >= threshold:
+                    mask[y, x] = True
     return mask
 
 def process_rois_for_predefined_centers():
@@ -614,7 +627,10 @@ def process_rois_for_predefined_centers():
     # Ensure the length of voi_sizes matches the length of recovery_coefficients
     #if len(voi_sizes) != len(recovery_coefficients):
     #    raise ValueError("The length of VOI numbers does not match the length of recovery coefficients.")
-
+    
+    # Convert roi_masks to a NumPy array
+    roi_masks_array = np.array(roi_masks)
+    print(f"Roi masks shape: {roi_masks_array.shape}")
     return roi_masks
 
 
