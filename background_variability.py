@@ -340,12 +340,13 @@ def on_slider_change(val):
 
 # Function to allow the user to select a folder and load DICOM images
 def load_folder():
-    global dicom_images, current_index
+    global dicom_images, current_index, loaded_folder_path
     directory = filedialog.askdirectory()  # Open folder dialog for the user to select a directory
     if directory:
         dicom_images = load_dicom_images(directory)  # Load DICOM images from the selected folder
         if dicom_images:
             current_index = 0
+            loaded_folder_path = directory  # Save the path of the loaded folder
             slice_slider.config(to=len(dicom_images) - 1)  # Update scrollbar range
             draw_rois()  # Display the first slice with ROIs
         else:
@@ -393,19 +394,19 @@ def get_mean_value(image_stack, mask):
     z_coords, y_coords, x_coords = np.where(mask)
     
     # Adjust the z coordinates by adding current_index
-    adjusted_z_coords = z_coords + current_index
+    #adjusted_z_coords = z_coords + current_index
     
     # Ensure the adjusted z coordinates are within bounds
-    adjusted_z_coords = np.clip(adjusted_z_coords, 0, image_stack.shape[0] - 1)
+    #adjusted_z_coords = np.clip(adjusted_z_coords, 0, image_stack.shape[0] - 1)
     
     # Extract the pixel values using the adjusted z, y, and x coordinates
-    pixel_values = image_stack[adjusted_z_coords, y_coords, x_coords]
+    pixel_values = image_stack[z_coords, y_coords, x_coords]
     
     # Calculate and return the mean value of the pixel values
     return np.mean(pixel_values)
 
 def suv_peak_with_spherical_voi():
-    global current_index, dicom_images, roi_masks
+    global current_index, dicom_images, roi_masks, loaded_folder_path
 
     radius_mm = 6.204  # Sphere radius in mm for a 1 mL 3D sphere
     dicom_image = dicom_images[current_index]
@@ -438,19 +439,55 @@ def suv_peak_with_spherical_voi():
 
     # Loop through each index where roi_masks is True
     for z, y, x in np.argwhere(roi_masks_array):
-        index = (z, y, x)
-        if can_place_sphere(index, radius_pixels):
-            mask = create_3d_spherical_mask(index, radius_pixels, image_stack.shape)
-            mean_value = get_mean_value(image_stack, mask)
-            if mean_value > max_values_per_slice[z]['max_mean']:
-                max_values_per_slice[z]['max_mean'] = mean_value
-                max_values_per_slice[z]['position'] = (y, x)  # Store the y, x position for the max value
+        #if 1 <= z <= 6:  # Only consider z values from 1 to 6 (the number of spheres)
+            index = (z, y, x)
+            if can_place_sphere(index, radius_pixels):
+                mask = create_3d_spherical_mask(index, radius_pixels, image_stack.shape)
+                mean_value = get_mean_value(image_stack, mask)
+                if mean_value > max_values_per_slice[z]['max_mean']:
+                    max_values_per_slice[z]['max_mean'] = mean_value
+                    max_values_per_slice[z]['position'] = (y, x)  # Store the y, x position for the max value
 
     # Print results for each slice
     for z, details in max_values_per_slice.items():
-        print(f"Max mean value in slice {z}: {details['max_mean']} at position {details['position']}")
+        print(f"SUV_peak in sphere {z}: {details['max_mean']} at position {details['position']}")
 
+    # Plot the SUV_peak against the sphere size
+    suv_peak_values = [details['max_mean'] for details in max_values_per_slice.values()][:6] # takes the first 6 values (i.e. the SUV_peak of the 6 spheres)
+    sphere_sizes = [10, 13, 17, 22, 28, 37]
+    
+    
+
+    plt.figure(figsize=(8, 6))  # Adjust plot size to make it more readable
+    plt.plot(sphere_sizes, suv_peak_values, marker='o')
+    plt.xlabel('Sphere Size [mm]')
+    plt.ylabel('SUV$_{peak}$ [Bq/mL]')
+    plt.title('SUV$_{peak}$ vs Sphere Size')
+    plt.xlim(7, 40)  # Set a reasonable range for x-axis
+    plt.ylim(0, 30000) #max(suv_peak_values) * 1.1)  # Set a reasonable range for y-axis
+    plt.xticks(sphere_sizes)  # Set x-ticks to the exact sphere sizes
+    plt.grid(True)  # Add grid to the plot
+    plt.tight_layout()
+
+
+    # Annotate each marker with its y-value
+    for x, y in zip(sphere_sizes, suv_peak_values):
+        plt.annotate(f'{y:.0f}', (x, y), textcoords="offset points", xytext=(0,10), ha='center')
+
+    # Get the parent directory of loaded_folder_path
+    parent_directory = os.path.dirname(loaded_folder_path)
+
+    # Save the plot as PNG and pickle
+    png_path = os.path.join(parent_directory, f'SUV_peak_against_sphere_size_algorithm_started_at_slice_{current_index}.png')
+    pickle_path = os.path.join(parent_directory, f'SUV_peak_against_sphere_size_algorithm_started_at_slice_{current_index}.pickle')
+
+    plt.savefig(png_path)
+    with open(pickle_path, 'wb') as f:
+        pickle.dump(plt.gcf(), f)
+
+    plt.show()
     return max_values_per_slice
+
     if False:
         for index in np.argwhere(roi_masks):
             print("I am here")
@@ -508,11 +545,17 @@ def create_3d_spherical_mask(center, radius_pixels, shape):
     num_slices: Number of slices the sphere covers.
     shape: Shape of the 3D image stack.
     """
+    global current_index
     z_center, y_center, x_center = center
+    z_center += current_index  # Add current_index to z_center
     depth, height, width = shape
+    print(f"Shape of the spherical mask: {shape}")
+    print(f"Center of the sphere: z: {z_center}, y: {y_center}, x: {x_center}")
+    print(f"Radius of the sphere: {radius_pixels}")
     
     z, y, x = np.ogrid[:depth, :height, :width]
     distance = np.sqrt((z - z_center)**2 + (y - y_center)**2 + (x - x_center)**2)
+    #print(f"Distance of the sphere: {distance}")
     mask = distance <= radius_pixels
     return mask
 
@@ -560,7 +603,7 @@ def process_rois_for_predefined_centers():
     # Centers of the 6 spheres with a 344x344 image size, increasing sphere sizes
     # centers = [(200, 165), (189, 190), (160, 194), (144, 171), (154, 146), (183, 142)] 
     # Centers of the 6 spheres with a 512x512 image size, increasing sphere sizes
-    centers = [(210, 271), (217, 228), (257, 214), (287, 242), (280, 282), (242, 298)]
+    centers = [(209, 270), (217, 228), (257, 214), (287, 242), (280, 282), (242, 298)]
     
     radius = 15  # Covers even the biggest sphere with a radius of 18.5 pixels (times approx. 2 mm pixel_spacing = 37 mm sphere)
     roi_masks = []
