@@ -48,11 +48,11 @@ def get_data(csv_file):
 
     # Plot and save the plots
     # Prostate lesion plots
-    plot_and_save_average_suv(prostate_lesion_data, csv_file, (2, 11))
-    plot_and_save_snr(prostate_lesion_data, csv_file, (2, 5))
+    plot_and_save_average_suv(prostate_lesion_data, csv_file, (0, 20))
+    plot_and_save_snr(prostate_lesion_data, csv_file, (2, 4))
     # Healthy prostate plots
     plot_and_save_average_suv(prostate_healthy_data, csv_file, (0, 2))
-    plot_and_save_snr(prostate_healthy_data, csv_file, (2, 4))
+    plot_and_save_snr(prostate_healthy_data, csv_file, (4, 6))
     # Gluteus maximus plots
     plot_and_save_average_suv(gluteus_maximus_data, csv_file, (0, 1))
     plot_and_save_snr(gluteus_maximus_data, csv_file, (0, 16))
