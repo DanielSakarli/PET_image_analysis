@@ -27,6 +27,7 @@ roi_masks = []
 # Global variables to maintain state across multiple DICOM folder additions
 iteration_count = 0
 # Initialize an array to store the recovery coefficients
+SUV_max_values = []
 recovery_coefficients = []
 # Initialize global variables
 dicom_images = []  # List to store DICOM images
@@ -70,7 +71,18 @@ def display_dicom_image(dicom_image, canvas, ax, rois=None, roi_pixels=None):
     roi_color = [0, 1, 1]  # Cyan color for VOI
     if roi_masks:
         for mask in roi_masks:
-            rgb_image[mask] = roi_color
+            if mask.shape == (512, 512):
+                rgb_image[mask] = roi_color
+            elif mask.shape == (127, 512, 512):
+                # Extract the relevant slice from the 3D mask
+                slice_index = current_index  # Assuming current_index is the relevant slice index
+                if 0 <= slice_index < mask.shape[0]:
+                    rgb_image[mask[slice_index]] = roi_color
+                else:
+                    print(f"Slice index {slice_index} is out of bounds for mask with shape {mask.shape}")
+            else:
+                print(f"Mask shape {mask.shape} does not match image shape {img_array.shape}")
+
     
     if roi_pixels:
         # Ensure roi_pixels is a list of tuples
@@ -406,7 +418,9 @@ def get_mean_value(image_stack, mask):
     return np.mean(pixel_values)
 
 def calculate_SUV_N():
-    process_rois_for_predefined_centers() # to ensure that roi_masks is up-to-date
+    process_rois_for_predefined_centers('roi') # initialize the 2D ROI mask
+    suv_peak_values = suv_peak_with_spherical_voi() # Get the SUV_peak with 2D ROI mask (3D is computationally too expensive)
+    process_rois_for_predefined_centers('voi') # update the 2D ROI mask to be a 3D VOI mask for SUV_N calculation
     global dicom_images, current_index, roi_masks, iteration_count, loaded_folder_path
     sphere_sizes = [10, 13, 17, 22, 28, 37]  # Example sphere sizes
     results = {size: [] for size in sphere_sizes}  # Dictionary to store results for each sphere size
@@ -421,7 +435,7 @@ def calculate_SUV_N():
         # Plot for SUV_N vs N for different spheres
         # Loop over each sphere in roi_masks_array
         for i, sphere_size in enumerate(sphere_sizes):
-            masked_values = current_slice[roi_masks_array[i]]
+            masked_values = image_stack[roi_masks_array[i]]
             if masked_values.size == 0:
                 print(f"No masked values found for sphere size {sphere_size} mm.")
                 continue
@@ -435,16 +449,13 @@ def calculate_SUV_N():
                 results[sphere_size].append(mean_top_N)
                 print(f"SUV_{N} for sphere size {sphere_size} mm: {mean_top_N:.2f} Bq/mL")
 
-       # Update plot
-        plt.figure('SUV$_{N}$ Plot')
-        for sphere_size in sphere_sizes:
-            plt.plot(range(5, 45, 5), results[sphere_size], marker='o', label=f'Sphere size: {sphere_size} mm')
-        plt.xlabel('Number N of maximal pixel values')
-        plt.ylabel('SUV${_N}$ [Bq/mL]')
-        plt.title('SUV${_N}$ vs Sphere Size')
-        plt.legend()
-        plt.grid(True)
-
+        # Update plot
+        load_more_data = plot_SUV_N(sphere_sizes, results, suv_peak_values)
+        if not load_more_data:
+            break
+        # More data to plot
+        iteration_count += 1
+        
         if False:
             # Plot for RC vs sphere size for different recons
             # Extract the top N pixel values where roi_masks is True
@@ -463,18 +474,64 @@ def calculate_SUV_N():
             plt.grid(True)
         
         # Ask user to load more data or not
-        answer = messagebox.askyesno("Load More Data", "Do you want to load more data?")
-        if not answer:
-            parent_directory = os.path.dirname(loaded_folder_path)
-            png_path = os.path.join(parent_directory, 'SUV_N_plot.png')
-            pickle_path = os.path.join(parent_directory, 'SUV_N_plot.pickle')
-            plt.savefig(png_path)
-            with open(pickle_path, 'wb') as f:
-                pickle.dump(plt.gcf(), f)
-            plt.show()
-            break
+        if False:
+            answer = messagebox.askyesno("Load More Data", "Do you want to load more data?")
+            if not answer:
+                parent_directory = os.path.dirname(loaded_folder_path)
+                png_path = os.path.join(parent_directory, 'SUV_N_plot.png')
+                pickle_path = os.path.join(parent_directory, 'SUV_N_plot.pickle')
+                plt.savefig(png_path)
+                with open(pickle_path, 'wb') as f:
+                    pickle.dump(plt.gcf(), f)
+                plt.show()
+                break
         
-        iteration_count += 1
+        
+
+def plot_SUV_N(sphere_sizes, results, suv_peak_values):
+    global SUV_max_values, loaded_folder_path
+
+    # Takes the first 6 values (i.e. the SUV_peak of the 6 spheres)
+    suv_peak_values = [details['max_mean'] for details in suv_peak_values.values()][:6] 
+    
+    # Add SUV_max_values to the beginning of the results for each sphere size
+    for i, sphere_size in enumerate(sphere_sizes):
+        results[sphere_size].insert(0, SUV_max_values[i])
+
+    # Add suv_peak_values to the results for each sphere size
+    for i, sphere_size in enumerate(sphere_sizes):
+        results[sphere_size].append(suv_peak_values[i])
+    
+    
+
+    # Define x-axis labels
+    x_labels = [r'SUV$_{max}$'] + [f'SUV$_{{{N}}}$' for N in range(5, 45, 5)] + [r'SUV$_{peak}$']
+   
+    # Plot the SUV_peak against the sphere size
+    plt.figure('SUV$_{N}$ Plot')
+    for sphere_size in sphere_sizes:
+        plt.plot(range(0, 50, 5), results[sphere_size], marker='o', label=f'Sphere size: {sphere_size} mm')
+    plt.xlabel('Mode of SUV')
+    plt.ylabel('SUV [Bq/mL]')
+    plt.title('Different Modes of SUV')
+    plt.xticks(range(0, 50, 5), x_labels)  # Set x-ticks to the defined labels
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+    # Ask user to load more data or not
+    answer = messagebox.askyesno("Load More Data", "Do you want to load more data?")
+    if not answer:
+        parent_directory = os.path.dirname(loaded_folder_path)
+        png_path = os.path.join(parent_directory, 'SUV_N_plot.png')
+        pickle_path = os.path.join(parent_directory, 'SUV_N_plot.pickle')
+        plt.savefig(png_path)
+        with open(pickle_path, 'wb') as f:
+            pickle.dump(plt.gcf(), f)
+        plt.show()
+        return False
+    else:
+        return True
+            
 
 def suv_peak_with_spherical_voi():
     global current_index, dicom_images, roi_masks, loaded_folder_path
@@ -527,8 +584,11 @@ def suv_peak_with_spherical_voi():
     suv_peak_values = [details['max_mean'] for details in max_values_per_slice.values()][:6] # takes the first 6 values (i.e. the SUV_peak of the 6 spheres)
     sphere_sizes = [10, 13, 17, 22, 28, 37]
     
-    
+    plot_suv_peak_against_sphere_size(suv_peak_values, sphere_sizes)
+    return max_values_per_slice
 
+def plot_suv_peak_against_sphere_size(suv_peak_values, sphere_sizes):
+    global current_index, loaded_folder_path
     plt.figure(figsize=(8, 6))  # Adjust plot size to make it more readable
     plt.plot(sphere_sizes, suv_peak_values, marker='o')
     plt.xlabel('Sphere Size [mm]')
@@ -557,7 +617,7 @@ def suv_peak_with_spherical_voi():
         pickle.dump(plt.gcf(), f)
 
     plt.show()
-    return max_values_per_slice
+    
 
     if False:
         for index in np.argwhere(roi_masks):
@@ -654,7 +714,7 @@ def build_image_stack():
 
     return image_stack
 
-def create_isocontour_voi(img_array, center, radius, threshold):
+def create_isocontour_roi(img_array, center, radius, threshold):
     """ Creates a binary mask for the isocontour ROI based on the threshold. """
     y_center, x_center = center
     mask = np.zeros_like(img_array, dtype=bool)
@@ -683,19 +743,22 @@ def create_isocontour_voi_3d(img_array, center, radius, threshold):
     return mask
 
 
-def process_rois_for_predefined_centers():
-    global roi_masks, current_index
+def process_rois_for_predefined_centers(roi_or_voi = 'roi'):
+    global roi_masks, current_index, SUV_max_values
     image_stack = build_image_stack()
     selected_slice = image_stack[current_index]
     print(f"Selected slice: {selected_slice}")
     print(f"Maximum of selected slice: {np.max(selected_slice)}")
     print(f"Shape of selected slice: {selected_slice.shape}")
-    # Centers of the 6 spheres with a 344x344 image size, increasing sphere sizes
+    # Centers of 6 2D spheres with a 344x344 image size, increasing sphere sizes
     # centers = [(200, 165), (189, 190), (160, 194), (144, 171), (154, 146), (183, 142)] 
-    # Centers of the 6 spheres with a 512x512 image size, increasing sphere sizes
-    #centers = [(209, 270), (217, 228), (257, 214), (287, 242), (280, 282), (242, 298)]
-    centers = [(current_index, 209, 270), (current_index, 217, 228), (current_index, 257, 214), (current_index, 287, 242), (current_index, 280, 282), (current_index, 242, 298)]
-    radius = 15  # Covers even the biggest sphere with a radius of 18.5 pixels (times approx. 2 mm pixel_spacing = 37 mm sphere)
+    if roi_or_voi == 'roi':
+        # Centers of 6 2D spheres with a 512x512 image size, increasing sphere sizes
+        centers = [(209, 270), (217, 228), (257, 214), (287, 242), (280, 282), (242, 298)]
+    else:
+        # Centers of 6 3D spheres with a 512x512 image size, increasing sphere sizes
+        centers = [(current_index, 209, 270), (current_index, 217, 228), (current_index, 257, 214), (current_index, 287, 242), (current_index, 280, 282), (current_index, 242, 298)]
+    radius = 15  # Covers even the biggest sphere with a diameter of 18.5 pixels (times approx. 2 mm pixel_spacing = 37 mm sphere)
     roi_masks = []
     # roi_pixels = []  # Initialize roi_pixels as an empty list
 
@@ -708,7 +771,10 @@ def process_rois_for_predefined_centers():
         #])
         true_activity = 28136.08 #Calculated the theoretical activity at scan start (Daniel, 10. Oct. 2024 12:22 pm)
         threshold = 0.4 * true_activity #local_max
-        roi_mask_temp = create_isocontour_voi_3d(selected_slice, center, radius, threshold)
+        if roi_or_voi == 'roi':
+            roi_mask_temp = create_isocontour_roi(selected_slice, center, radius, threshold)
+        else:
+            roi_mask_temp = create_isocontour_voi_3d(image_stack, center, radius, threshold)
         print(f"VOI {len(roi_masks) + 1} - Threshold: {threshold:.2f}, Max Value: {true_activity:.2f}, Number of Pixels: {np.sum(roi_mask_temp)}")
         roi_masks.append(roi_mask_temp)
     print(f"roi_masks: {roi_masks}")
@@ -728,31 +794,34 @@ def process_rois_for_predefined_centers():
                 max(0, center[1] - radius):min(selected_slice.shape[1], center[1] + radius)
             ])
             threshold = 0.4 * local_max
-            voi_mask = create_isocontour_voi(selected_slice, center, radius, threshold)
+            voi_mask = create_isocontour_roi(selected_slice, center, radius, threshold)
             print(f"VOI {len(vois) + 1} - Threshold: {threshold:.2f}, Max Value: {local_max:.2f}, Number of Pixels: {np.sum(voi_mask)}")
             vois.append(voi_mask)
     
         display_dicom_image(selected_slice, canvas, ax, voi_masks=vois)
     # Initialize an array to store the mean values of the different VOIs
     mean_values = []
-
-    # Calculate the mean values of the different ROIs
+    if roi_or_voi == 'voi':
+        SUV_max_values = [] # Reset the global SUV_max_values array if called by the VOI function (to avoid appending the SUV_max to the ones from the ROIs)
+    # Calculate the mean values of the different ROIs/VOIs
     for i, roi_in_roi_masks in enumerate(roi_masks):
-        mean_value = np.mean(selected_slice[roi_in_roi_masks])
+        if roi_in_roi_masks.ndim == 3:
+            mean_value = np.mean(image_stack[roi_in_roi_masks])
+            max_value = np.max(image_stack[roi_in_roi_masks])
+        else:
+            mean_value = np.mean(selected_slice[roi_in_roi_masks])
+            max_value = np.max(selected_slice[roi_in_roi_masks])
         num_pixels = np.sum(roi_in_roi_masks)
         mean_values.append(mean_value)
+        SUV_max_values.append(max_value)
         print(f"Mean value for VOI {i + 1}: {mean_value:.2f}")
+        print(f"SUV_max value for VOI {i + 1}: {max_value:.2f}")
         print(f"Number of pixels in VOI {i + 1}: {num_pixels}")
-
-    # Calculate the max value from the very first VOI (i.e. the 37 mm sphere)
-    max_value = true_activity #np.mean(selected_slice[roi_masks[5]])
-    print(f"Max value from the biggest VOI: {max_value:.2f}")
-
-    
-
+ 
     # Calculate the recovery coefficient of the different ROIs using the stored mean values
+    print(f"True activity: {true_activity:.2f}")
     for i, mean_value in enumerate(mean_values):
-        recovery_coefficient = mean_value / max_value
+        recovery_coefficient = mean_value / true_activity
         recovery_coefficients.append(recovery_coefficient)
         print(f"Recovery coefficient for VOI {i + 1}: {recovery_coefficient:.2f}")
 
