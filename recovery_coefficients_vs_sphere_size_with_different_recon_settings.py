@@ -505,34 +505,15 @@ def plot_SUV_N(sphere_sizes, results, suv_peak_values):
     # Normalize the SUV_max/SUV_N/SUV_peak values with formula (1) provided in https://doi.org/10.1007/s11604-021-01112-w
     phantom_weight =  12.6 # measured the water-filled NEMQ IQ phantom in kg (+-0.1 kg) (NEMA NU 2-2007)
     injected_activity = 2729200 # measured the injected activity in Bq
-    activty_conc_at_scan_start = 28136.08 # calculated the activity with the measured injected_activity and the decay constant of F-18 (in Bq)
-    activity_conc_at_scan_end = 25593.21
-    # take the true activtiy concentration as the average of the activity concentration at the start and end of the scan
-    # reason: can't decay-correct as usual since it is a static image and not a dynamic one
-    true_activity_conc = ((activty_conc_at_scan_start - activity_conc_at_scan_end) / 2) + activity_conc_at_scan_end
+    activty_at_scan_start = 28136.08 # calculated the activity with the measured injected_activity and the decay constant of F-18 (in Bq)
     # measured activity concentration in Bq/mL / (injected activity in Bq / phantom weight in kg)    
     for sphere_size in sphere_sizes:
         results[sphere_size] = [value / (injected_activity * phantom_weight) for value in results[sphere_size]]
     
     # Normalize the SUV_max/SUV_N/SUV_peak values with formula (1) and (2) provided in https://doi.org/10.1007/s11604-021-01112-w
-    SUV_ref = true_activity_conc / (injected_activity * phantom_weight) # true activity concentration in Bq/mL / (injected activity in Bq / phantom weight in kg)
+    SUV_ref = activty_at_scan_start / (injected_activity * phantom_weight) # true activity concentration in Bq/mL / (injected activity in Bq / phantom weight in kg)
     for sphere_size in sphere_sizes:
         results[sphere_size] = [((value - SUV_ref) / SUV_ref) * 100 for value in results[sphere_size]]
-
-    # Calculate and print the absolute sum of the results for each sphere size
-    for sphere_size in sphere_sizes:
-        abs_sum = sum(abs(value) for value in results[sphere_size])
-        print(f"Absolute sum of results for sphere size {sphere_size} mm: {abs_sum:.2f}")
-    
-    # Calculate and print the absolute sum of the results for each index across all sphere sizes
-    num_values = len(results[sphere_sizes[0]])  # Assuming all sphere sizes have the same number of values
-    abs_sums = []
-    for idx in range(num_values):
-        abs_sum = sum(abs(results[sphere_size][idx]) for sphere_size in sphere_sizes)
-        abs_sums.append(abs_sum)
-        print(f"Absolute sum of results for index {idx + 1}: {abs_sum:.2f}")
-
-
 
     # Define x-axis labels
     x_labels = [r'SUV$_{max}$'] + [f'SUV$_{{{N}}}$' for N in range(5, 45, 5)] + [r'SUV$_{peak}$']
@@ -558,26 +539,8 @@ def plot_SUV_N(sphere_sizes, results, suv_peak_values):
         with open(pickle_path, 'wb') as f:
             pickle.dump(plt.gcf(), f)
         plt.show()
-        
-        # Plot the abs_sum values against the x_labels
-        plt.figure('Summed Absolute Error Plot')
-        plt.plot(range(num_values), abs_sums, marker='o')
-        plt.xlabel('Mode of SUV')
-        plt.ylabel(r'Summed Absolute $\Delta$SUV [%]')
-        plt.title('SUV Mode Dependent Error')
-        plt.xticks(range(num_values), x_labels)  # Set x-ticks to the defined labels
-        plt.grid(True)
-        plt.show()
-        png_path = os.path.join(parent_directory, 'SUV_mode_dependent_error.png')
-        pickle_path = os.path.join(parent_directory, 'SUV_mode_dependent_error.pickle')
-        plt.savefig(png_path)
-        with open(pickle_path, 'wb') as f:
-            pickle.dump(plt.gcf(), f)
-        plt.show()
-
         return False
     else:
-
         return True
             
 
@@ -884,10 +847,24 @@ def process_rois_for_predefined_centers(roi_or_voi = 'roi'):
     return roi_masks
 
 
-def draw_plot():
-    global iteration_count, recovery_coefficients, loaded_folder_path
-    
+def draw_recovery_coefficients():
+    global iteration_count, loaded_folder_path
     voi_sizes = [10, 13, 17, 22, 28, 37]
+    # Earlier calculated SUV_N values for N =  for the different sphere sizes at recon Phantom-01/-02/-03/-......
+    SUV_N_01 = [24112.53, 27057.20, 28927.80, 31733.00, 31394.60, 31100.07]
+    SUV_N_02 = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    SUV_N_03 = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    SUV_N_04 = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    SUV_N_05 = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    SUV_N_06 = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    SUV_N_07 = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    SUV_N_08 = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    activty_conc_at_scan_start = 28136.08 # calculated the activity with the measured injected_activity and the decay constant of F-18 (in Bq)
+    activity_conc_at_scan_end = 25593.21
+    # take the true activtiy concentration as the average of the activity concentration at the start and end of the scan
+    # reason: can't decay-correct as usual since it is a static image and not a dynamic one
+    true_activity_conc = ((activty_conc_at_scan_start - activity_conc_at_scan_end) / 2) + activity_conc_at_scan_end
+    
     
     # Reshape recovery_coefficients to a 2D array where each row is a set of 6 coefficients
     recovery_coefficients_reshaped = np.reshape(recovery_coefficients, (-1, 6))
@@ -1002,9 +979,9 @@ def create_gui():
     process_voi_button = tk.Button(root, text="Isocontour detection", command=process_rois_for_predefined_centers)
     process_voi_button.pack(side=tk.LEFT, padx=20, pady=10)
 
-    # Draw Plot Button
-    draw_plot_button = tk.Button(root, text="Draw Plot", command=draw_plot)
-    draw_plot_button.pack(side=tk.LEFT, padx=25, pady=10)
+    # Draw RC Button
+    draw_recovery_coefficients_button = tk.Button(root, text="Draw Recovery Coefficients", command=draw_recovery_coefficients)
+    draw_recovery_coefficients_button.pack(side=tk.LEFT, padx=25, pady=10)
 
     # Show Plot Button
     show_plot_button = tk.Button(root, text="Show Plot", command=show_plot)
