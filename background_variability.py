@@ -547,18 +547,17 @@ def plot_SUV_N(sphere_sizes, results, suv_peak_values):
     plt.xticks(range(0, 50, 5), x_labels)  # Set x-ticks to the defined labels
     plt.legend()
     plt.grid(True)
+    parent_directory = os.path.dirname(loaded_folder_path)
+    png_path = os.path.join(parent_directory, 'SUV_N_plot.png')
+    pickle_path = os.path.join(parent_directory, 'SUV_N_plot.pickle')
+    plt.savefig(png_path)
+    with open(pickle_path, 'wb') as f:
+        pickle.dump(plt.gcf(), f)
     plt.show()
+    #plt.show()
     # Ask user to load more data or not
     answer = messagebox.askyesno("Load More Data", "Do you want to load more data?")
-    if not answer:
-        parent_directory = os.path.dirname(loaded_folder_path)
-        png_path = os.path.join(parent_directory, 'SUV_N_plot.png')
-        pickle_path = os.path.join(parent_directory, 'SUV_N_plot.pickle')
-        plt.savefig(png_path)
-        with open(pickle_path, 'wb') as f:
-            pickle.dump(plt.gcf(), f)
-        plt.show()
-        
+    if not answer:        
         # Plot the abs_sum values against the x_labels
         plt.figure('Summed Absolute Error Plot')
         plt.plot(range(num_values), abs_sums, marker='o')
@@ -567,7 +566,6 @@ def plot_SUV_N(sphere_sizes, results, suv_peak_values):
         plt.title('SUV Mode Dependent Error')
         plt.xticks(range(num_values), x_labels)  # Set x-ticks to the defined labels
         plt.grid(True)
-        plt.show()
         png_path = os.path.join(parent_directory, 'SUV_mode_dependent_error.png')
         pickle_path = os.path.join(parent_directory, 'SUV_mode_dependent_error.pickle')
         plt.savefig(png_path)
