@@ -687,8 +687,12 @@ def noise_vs_sphere_size():
     #center = (0, 209, 270) # for the z value, the method create_3d_spherical_mask is adjusted to add the current_index (i.e. the slice number)
     #center = (0, 242, 298) # biggest sphere center position
     # Centers of 6 3D spheres with a 512x512 image size, increasing sphere sizes
-    centers = [(0, 209, 270), (0, 217, 228), (0, 257, 214), (0, 287, 242), (0, 280, 282), (0, 242, 298)]
+    #centers = [(0, 209, 270), (0, 217, 228), (0, 257, 214), (0, 287, 242), (0, 280, 282), (0, 242, 298)]
+    # Centers of 6 3D spheres with a 344x344 image size, increasing sphere sizes
+    centers = [(0, 142, 183), (0, 146, 154), (0, 172, 144), (0, 194, 161), (0, 190, 189), (0, 165, 200)] 
     
+    plot_line_profiles(image_stack, centers)
+
     # VOI radius in pixels
     voi_sizes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13] # intentionally goes over the borders of the actual sphere size to see how the noise and mean behave over the sphere size border
     masks = []
@@ -706,6 +710,7 @@ def noise_vs_sphere_size():
 
 
         plot_mean_vs_sphere_size(voi_sizes, mean_values)
+        
         # Reset the masks and mean values after plotting them for the current sphere
         masks = []
         mean_values = []
@@ -713,30 +718,70 @@ def noise_vs_sphere_size():
     activity_conc_at_scan_end = 25593.21
     # take the true activtiy concentration as the average of the activity concentration at the start and end of the scan
     # reason: can't decay-correct as usual since it is a static image and not a dynamic one
-    true_activity_conc = ((activity_conc_at_scan_start - activity_conc_at_scan_end) / 2) + activity_conc_at_scan_end
-    print(f"True activity concentration: {true_activity_conc:.2f} Bq/mL")
+    #true_activity_conc = ((activity_conc_at_scan_start - activity_conc_at_scan_end) / 2) + activity_conc_at_scan_end
+    print(f"True activity concentration: {activity_conc_at_scan_start:.2f} Bq/mL")
     plt.show()
 
-def get_ir_value(image_stack, mask):
+def get_ir_value(image_stack, mask, sphere_index):
     """
-    Calculate the image roughness within the mask (i.e. one sphere)
+    Calculate the image roughness within the mask (i.e. one sphere) for all recons
+    Followed fromula (3) of http://dx.doi.org/10.1088/0031-9155/55/5/013
+    Adapted it to not just take the mean value of the sphere but to take the
+    SUV_N with N=15 and average it. This reduced the amount of over- and
+    undercompenstation of the signal 
     image_stack: 3D image stack.
     mask: 3D boolean mask.
+    sphere_index: Index of the sphere to access the correct SUV_N values.
     """
     global current_index
-    # Extract the z, y, and x coordinates from the mask
-    z_coords, y_coords, x_coords = np.where(mask)
     
-    # Extract the pixel values using the adjusted z, y, and x coordinates
-    pixel_values = image_stack[z_coords, y_coords, x_coords]
-    ir_values = []
-    number_of_pixels = np.sum(mask)
+    
+    # Earlier calculated SUV_N values for N = 15 for the different sphere sizes at recon Phantom-01/-02/-03/-......
+    # Do not delete or change these values. If you want to update the values, comment the old values out.
+    SUV_N = [
+        [24112.53, 27057.20, 28927.80, 31733.00, 31394.60, 31100.07], #SUV_N_01
+        [23197.80, 26127.93, 28382.27, 31224.20, 31661.93, 31961.00], #SUV_N_02
+        [22330.27, 25897.73, 27985.33, 30909.07, 31821.67, 32160.80], #SUV_N_03
+        [21833.73, 25974.00, 27838.13, 30907.33, 31895.27, 32314.60], #SUV_N_04
+        [21341.13, 25854.53, 27627.93, 30744.87, 31737.33, 32199.73], #SUV_N_05
+        [20835.33, 25594.93, 27327.27, 30440.73, 31461.13, 31928.67], #SUV_N_06
+        [20438.00, 25366.53, 27110.00, 30185.53, 31237.40, 31706.07], #SUV_N_07
+        [20131.80, 25170.27, 26933.20, 26933.20, 29963.80, 31056.60] #SUV_N_08
+    ]
+    
+    recon_names = ['Recon 1', 'Recon 2', 'Recon 3', 'Recon 4', 'Recon 5', 'Recon 6', 'Recon 7', 'Recon 8']
+    ir_values_per_sphere = []
 
-    for value in pixel_values:
-        ir = ((1/(number_of_pixels-1)) * (np.sqrt(value - get_mean_value(image_stack, mask))**2)) / get_mean_value(image_stack, mask)
-        ir_values.append(ir)
-        print(f"Image roughness: {ir}")
-    return ir_values
+    # Loop through each mask and calculate IR values
+    for sphere_index, mask in enumerate(masks):
+        z_coords, y_coords, x_coords = np.where(mask)
+        pixel_values = image_stack[z_coords, y_coords, x_coords]
+        number_of_pixels = np.sum(mask)
+        ir_values = []
+
+        # Get the mean SUV values for the current sphere across all recons
+        mean_of_sphere_recons = [suv[sphere_index] for suv in SUV_N]
+
+        # Calculate image roughness for each recon
+        for mean_value in mean_of_sphere_recons:
+            temp_value = np.sum((pixel_values - mean_value) ** 2)
+            ir = (np.sqrt((1 / (number_of_pixels - 1)) * temp_value)) / mean_value
+            ir_values.append(ir)
+
+    ir_values_per_sphere.append(ir_values)
+
+    plot_ir_values(ir_values)
+
+def plot_ir_values(ir_values):
+    global iteration_count
+    recon_names = ['Phantom-01', 'Phantom-02', 'Phantom-03', 'Phantom-04', 'Phantom-05', 'Phantom-06', 'Phantom-07', 'Phantom-08']
+    plt.figure(f'Image Roughness vs Reconstruction {iteration_count + 1}')
+    plt.plot(recon_names, ir_values, marker='o')
+    plt.xlabel('Reconstruction')
+    plt.ylabel('Image Roughness')
+    plt.title('Image Roughness vs Reconstruction')
+    plt.grid(True)
+    iteration_count += 1
 
 def plot_mean_vs_sphere_size(voi_sizes, mean_values):
     global dicom_images, iteration_count
@@ -753,6 +798,85 @@ def plot_mean_vs_sphere_size(voi_sizes, mean_values):
     plt.grid(True)
     iteration_count += 1
 
+
+def plot_line_profiles(image_stack, centers):
+    """
+    Extracts and plots line profiles through the centers of spheres in z, y, and x directions.
+
+    Args:
+    image_stack (np.array): The 3D DICOM image stack.
+    centers (list): List of tuples containing the centers of spheres.
+    pixel_spacing (float): Pixel spacing to convert indices to mm.
+    """
+    global dicom_images, loaded_folder_path
+    fig, axs = plt.subplots(3, len(centers), figsize=(15, 10))
+    pixel_spacing = dicom_images[0][0x0028, 0x0030].value
+    slice_thickness = dicom_images[0][0x0018, 0x0050].value
+    sphere_sizes = [10, 13, 17, 22, 28, 37]
+    mm_limit = 25 # plot ±20 mm around the center
+
+    for i, center in enumerate(centers):
+        z_center, y_center, x_center = center
+
+        # Add current_index (i.e. currently selected slice) to z_center
+        z_center += current_index
+
+        # Calculate index offsets for ±25 mm
+        offset_z = int(mm_limit / slice_thickness)
+        offset_y = int(mm_limit / pixel_spacing[1])
+        offset_x = int(mm_limit / pixel_spacing[0])
+
+        # Ensure boundaries are within the image dimensions
+        z_indices = np.arange(max(0, z_center - offset_z), min(image_stack.shape[0], z_center + offset_z + 1))
+        y_indices = np.arange(max(0, y_center - offset_y), min(image_stack.shape[1], y_center + offset_y + 1))
+        x_indices = np.arange(max(0, x_center - offset_x), min(image_stack.shape[2], x_center + offset_x + 1))
+
+        # Extract profiles
+        profile_z = image_stack[z_indices, y_center, x_center]
+        profile_y = image_stack[z_center, y_indices, x_center]
+        profile_x = image_stack[z_center, y_center, x_indices]
+
+        # Calculate distances in mm
+        z_distances = (z_indices - z_center) * slice_thickness
+        y_distances = (y_indices - y_center) * pixel_spacing[1]
+        x_distances = (x_indices - x_center) * pixel_spacing[0]
+
+        # Plotting
+        axs[0, i].plot(x_distances, profile_x)
+        axs[0, i].set_title(f'X Profile - {sphere_sizes[i]} mm Sphere')
+        axs[0, i].set_xlabel('Distance [mm]')
+        axs[0, i].set_ylabel('Signal Intensity [Bq/mL]')
+        axs[0, i].set_ylim(0, 32000)  # Limit y-axis
+
+        axs[1, i].plot(y_distances, profile_y)
+        axs[1, i].set_title(f'Y Profile - {sphere_sizes[i]} mm Sphere')
+        axs[1, i].set_xlabel('Distance [mm]')
+        axs[1, i].set_ylabel('Signal Intensity [Bq/mL]')
+        axs[1, i].set_ylim(0, 32000)
+
+        axs[2, i].plot(z_distances, profile_z)
+        axs[2, i].set_title(f'Z Profile - {sphere_sizes[i]} mm Sphere')
+        axs[2, i].set_xlabel('Distance [mm]')
+        axs[2, i].set_ylabel('Signal Intensity [Bq/mL]')
+        axs[2, i].set_ylim(0, 32000)
+        
+    plt.tight_layout()
+    # Toggle full screen mode
+    #manager = plt.get_current_fig_manager()
+    #manager.full_screen_toggle()
+    if False:
+        # Save the plot as PDF, PNG, and pickle file in the parent directory of loaded_folder_path
+        parent_directory = os.path.dirname(loaded_folder_path)
+        pdf_path = os.path.join(parent_directory, 'signal_intensity_line_profiles.pdf')
+        png_path = os.path.join(parent_directory, 'signal_intensity_line_profiles.png')
+        pickle_path = os.path.join(parent_directory, 'signal_intensity_line_profiles.pickle')
+
+        plt.savefig(pdf_path)
+        plt.savefig(png_path)
+        with open(pickle_path, 'wb') as f:
+            pickle.dump(fig, f)
+
+    plt.show()
 
 def create_3d_spherical_mask(center, radius_pixels, shape):
     """
@@ -923,8 +1047,8 @@ def process_rois_for_predefined_centers(roi_or_voi = 'roi'):
 
 
 def draw_recovery_coefficients():
-    global iteration_count, loaded_folder_path
-    voi_sizes = [10, 13, 17, 22, 28, 37]
+    global iteration_count
+    sphere_sizes = [10, 13, 17, 22, 28, 37]
     # Earlier calculated SUV_N values for N = 15 for the different sphere sizes at recon Phantom-01/-02/-03/-......
     # Do not delete or change these values. If you want to update the values, comment the old values out.
     SUV_N_01 = [24112.53, 27057.20, 28927.80, 31733.00, 31394.60, 31100.07]
@@ -936,40 +1060,55 @@ def draw_recovery_coefficients():
     SUV_N_07 = [20438.00, 25366.53, 27110.00, 30185.53, 31237.40, 31706.07]
     SUV_N_08 = [20131.80, 25170.27, 26933.20, 26933.20, 29963.80, 31056.60]
     activity_conc_at_scan_start = 28136.08 # calculated the activity with the measured injected_activity and the decay constant of F-18 (in Bq)
-    activity_conc_at_scan_end = 25593.21
+    # activity_conc_at_scan_end = 25593.21
     # take the true activtiy concentration as the average of the activity concentration at the start and end of the scan
     # reason: can't decay-correct as usual since it is a static image and not a dynamic one
-    true_activity_conc = ((activity_conc_at_scan_start - activity_conc_at_scan_end) / 2) + activity_conc_at_scan_end
+    # true_activity_conc = ((activity_conc_at_scan_start - activity_conc_at_scan_end) / 2) + activity_conc_at_scan_end
     
     
-    # Reshape recovery_coefficients to a 2D array where each row is a set of 6 coefficients
-    recovery_coefficients_reshaped = np.reshape(recovery_coefficients, (-1, 6))
-    
-    # Create figure and axis locally
-    fig, ax = plt.subplots()
-    
-    # Plot each set of recovery coefficients
-    for i, recovery_coeffs in enumerate(recovery_coefficients_reshaped):
-        ax.plot(voi_sizes, recovery_coeffs, marker='o', label=f'Iteration {i + 1}')
-    
-    ax.set_xlabel('Sphere Size [mm]')
-    ax.set_ylabel('Recovery Coefficient [1]')
-    ax.set_title('Recovery Coefficients vs Sphere Size')
-    ax.grid(True)
-    ax.legend()
+    # Divide all the values of the 8 arrays by activity_conc_at_scan_start
+    SUV_N_01 = [100 * value / activity_conc_at_scan_start for value in SUV_N_01]
+    SUV_N_02 = [100 * value / activity_conc_at_scan_start for value in SUV_N_02]
+    SUV_N_03 = [100 * value / activity_conc_at_scan_start for value in SUV_N_03]
+    SUV_N_04 = [100 * value / activity_conc_at_scan_start for value in SUV_N_04]
+    SUV_N_05 = [100 * value / activity_conc_at_scan_start for value in SUV_N_05]
+    SUV_N_06 = [100 * value / activity_conc_at_scan_start for value in SUV_N_06]
+    SUV_N_07 = [100 * value / activity_conc_at_scan_start for value in SUV_N_07]
+    SUV_N_08 = [100 * value / activity_conc_at_scan_start for value in SUV_N_08]
 
-    # Get the parent directory of loaded_folder_path
-    parent_directory = os.path.dirname(loaded_folder_path)
+    # Plot each SUV array against the voi_sizes
+    plt.figure('Recovery Coefficients')
+    plt.plot(sphere_sizes, SUV_N_01, marker='o', label='Recon 1')
+    plt.plot(sphere_sizes, SUV_N_02, marker='o', label='Recon 2')
+    plt.plot(sphere_sizes, SUV_N_03, marker='o', label='Recon 3')
+    plt.plot(sphere_sizes, SUV_N_04, marker='o', label='Recon 4')
+    plt.plot(sphere_sizes, SUV_N_05, marker='o', label='Recon 5')
+    plt.plot(sphere_sizes, SUV_N_06, marker='o', label='Recon 6')
+    plt.plot(sphere_sizes, SUV_N_07, marker='o', label='Recon 7')
+    plt.plot(sphere_sizes, SUV_N_08, marker='o', label='Recon 8')
 
-    # Save the plot as PNG and pickle
-    png_path = os.path.join(parent_directory, f'Recovery_coefficients_vs_sphere_size.png')
-    pickle_path = os.path.join(parent_directory, f'Recovery_coefficients_vs_sphere_size.pickle')
-
-    plt.savefig(png_path)
-    with open(pickle_path, 'wb') as f:
-        pickle.dump(plt.gcf(), f)
-
+    # Add labels and legend
+    plt.xlabel('Sphere Size [mm]')
+    plt.ylabel('Recovery Coefficient [%]')
+    plt.title('Recovery Coefficients vs Sphere Size')
+    plt.legend()
+    plt.grid(True)
+    plt.xticks(sphere_sizes)  # Set x-ticks to the exact sphere sizes
+    plt.ylim(70, 120)
     plt.show()
+    if False:
+        # Get the parent directory of loaded_folder_path
+        parent_directory = os.path.dirname(loaded_folder_path)
+
+        # Save the plot as PNG and pickle
+        png_path = os.path.join(parent_directory, f'Recovery_coefficients_vs_sphere_size.png')
+        pickle_path = os.path.join(parent_directory, f'Recovery_coefficients_vs_sphere_size.pickle')
+
+        plt.savefig(png_path)
+        with open(pickle_path, 'wb') as f:
+            pickle.dump(plt.gcf(), f)
+
+        plt.show()
 
     #plt.show()  # Show the plot and block interaction until closed
     #plt.close(fig)  # Ensure the figure is closed after displaying

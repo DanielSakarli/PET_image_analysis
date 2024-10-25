@@ -868,14 +868,14 @@ def draw_recovery_coefficients():
     
     
     # Divide all the values of the 8 arrays by activity_conc_at_scan_start
-    SUV_N_01 = [value / activity_conc_at_scan_start for value in SUV_N_01]
-    SUV_N_02 = [value / activity_conc_at_scan_start for value in SUV_N_02]
-    SUV_N_03 = [value / activity_conc_at_scan_start for value in SUV_N_03]
-    SUV_N_04 = [value / activity_conc_at_scan_start for value in SUV_N_04]
-    SUV_N_05 = [value / activity_conc_at_scan_start for value in SUV_N_05]
-    SUV_N_06 = [value / activity_conc_at_scan_start for value in SUV_N_06]
-    SUV_N_07 = [value / activity_conc_at_scan_start for value in SUV_N_07]
-    SUV_N_08 = [value / activity_conc_at_scan_start for value in SUV_N_08]
+    SUV_N_01 = [100 * value / activity_conc_at_scan_start for value in SUV_N_01]
+    SUV_N_02 = [100 * value / activity_conc_at_scan_start for value in SUV_N_02]
+    SUV_N_03 = [100 * value / activity_conc_at_scan_start for value in SUV_N_03]
+    SUV_N_04 = [100 * value / activity_conc_at_scan_start for value in SUV_N_04]
+    SUV_N_05 = [100 * value / activity_conc_at_scan_start for value in SUV_N_05]
+    SUV_N_06 = [100 * value / activity_conc_at_scan_start for value in SUV_N_06]
+    SUV_N_07 = [100 * value / activity_conc_at_scan_start for value in SUV_N_07]
+    SUV_N_08 = [100 * value / activity_conc_at_scan_start for value in SUV_N_08]
 
     # Plot each SUV array against the voi_sizes
     plt.figure('Recovery Coefficients')
@@ -889,12 +889,13 @@ def draw_recovery_coefficients():
     plt.plot(sphere_sizes, SUV_N_08, marker='o', label='Recon 8')
 
     # Add labels and legend
-    plt.xlabel('VOI Size [mm]')
-    plt.ylabel('Normalized SUV')
-    plt.title('Recovery Coefficients vs VOI Size')
+    plt.xlabel('Sphere Size [mm]')
+    plt.ylabel('Recovery Coefficient [%]')
+    plt.title('Recovery Coefficients vs Sphere Size')
     plt.legend()
     plt.grid(True)
     plt.xticks(sphere_sizes)  # Set x-ticks to the exact sphere sizes
+    plt.ylim(70, 120)
     plt.show()
     if False:
         # Get the parent directory of loaded_folder_path
