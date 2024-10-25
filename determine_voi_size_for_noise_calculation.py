@@ -679,6 +679,81 @@ def can_place_sphere(center, radius_pixels):
     else:
         return False
 
+def noise_vs_sphere_size():
+    # Shape of the 3D image stack
+    image_stack = build_image_stack()
+    shape = image_stack.shape
+    # Center of smallest 3D sphere with a 512x512 image size
+    #center = (0, 209, 270) # for the z value, the method create_3d_spherical_mask is adjusted to add the current_index (i.e. the slice number)
+    #center = (0, 242, 298) # biggest sphere center position
+    # Centers of 6 3D spheres with a 512x512 image size, increasing sphere sizes
+    centers = [(0, 209, 270), (0, 217, 228), (0, 257, 214), (0, 287, 242), (0, 280, 282), (0, 242, 298)]
+    
+    # VOI radius in pixels
+    voi_sizes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13] # intentionally goes over the borders of the actual sphere size to see how the noise and mean behave over the sphere size border
+    masks = []
+    mean_values = []
+    ir_values = [] # image roughness values (i.e. the noise)
+
+    for center in centers:
+        for voi in voi_sizes:
+            mask = create_3d_spherical_mask(center, voi, shape)
+            masks.append(mask)
+            mean_value = get_mean_value(image_stack, mask)
+            mean_values.append(mean_value)
+            #ir_value = get_ir_value(image_stack, mask)
+            #ir_values.append(ir_value)
+
+
+        plot_mean_vs_sphere_size(voi_sizes, mean_values)
+        # Reset the masks and mean values after plotting them for the current sphere
+        masks = []
+        mean_values = []
+    activity_conc_at_scan_start = 28136.08 # calculated the activity with the measured injected_activity and the decay constant of F-18 (in Bq)
+    activity_conc_at_scan_end = 25593.21
+    # take the true activtiy concentration as the average of the activity concentration at the start and end of the scan
+    # reason: can't decay-correct as usual since it is a static image and not a dynamic one
+    true_activity_conc = ((activity_conc_at_scan_start - activity_conc_at_scan_end) / 2) + activity_conc_at_scan_end
+    print(f"True activity concentration: {true_activity_conc:.2f} Bq/mL")
+    plt.show()
+
+def get_ir_value(image_stack, mask):
+    """
+    Calculate the image roughness within the mask (i.e. one sphere)
+    image_stack: 3D image stack.
+    mask: 3D boolean mask.
+    """
+    global current_index
+    # Extract the z, y, and x coordinates from the mask
+    z_coords, y_coords, x_coords = np.where(mask)
+    
+    # Extract the pixel values using the adjusted z, y, and x coordinates
+    pixel_values = image_stack[z_coords, y_coords, x_coords]
+    ir_values = []
+    number_of_pixels = np.sum(mask)
+
+    for value in pixel_values:
+        ir = ((1/(number_of_pixels-1)) * (np.sqrt(value - get_mean_value(image_stack, mask))**2)) / get_mean_value(image_stack, mask)
+        ir_values.append(ir)
+        print(f"Image roughness: {ir}")
+    return ir_values
+
+def plot_mean_vs_sphere_size(voi_sizes, mean_values):
+    global dicom_images, iteration_count
+    # Extract pixel spacing from the DICOM images
+    pixel_spacing = dicom_images[0][0x0028, 0x0030].value
+    print(f"Pixel spacing: {pixel_spacing}")
+    voi_sizes_mm = [voi_size * pixel_spacing[0] * 2 for voi_size in voi_sizes]
+    sphere_sizes = [10, 13, 17, 22, 28, 37]
+    plt.figure(f'Mean vs VOI Size {iteration_count + 1}')
+    plt.plot(voi_sizes_mm, mean_values, marker='o')
+    plt.xlabel('VOI Size [mm]')
+    plt.ylabel('Mean Value [Bq/mL]')
+    plt.title(f'Sphere Size {sphere_sizes[iteration_count]} mm: Mean Value vs VOI Size within the sphere')
+    plt.grid(True)
+    iteration_count += 1
+
+
 def create_3d_spherical_mask(center, radius_pixels, shape):
     """
     Create a 3D spherical mask.
@@ -689,7 +764,7 @@ def create_3d_spherical_mask(center, radius_pixels, shape):
     """
     global current_index
     z_center, y_center, x_center = center
-    z_center += current_index  # Add current_index to z_center
+    z_center += current_index  # Add current_index (i.e. the current slice) to z_center
     depth, height, width = shape
     print(f"Shape of the spherical mask: {shape}")
     print(f"Center of the sphere: z: {z_center}, y: {y_center}, x: {x_center}")
@@ -848,8 +923,8 @@ def process_rois_for_predefined_centers(roi_or_voi = 'roi'):
 
 
 def draw_recovery_coefficients():
-    global iteration_count
-    sphere_sizes = [10, 13, 17, 22, 28, 37]
+    global iteration_count, loaded_folder_path
+    voi_sizes = [10, 13, 17, 22, 28, 37]
     # Earlier calculated SUV_N values for N = 15 for the different sphere sizes at recon Phantom-01/-02/-03/-......
     # Do not delete or change these values. If you want to update the values, comment the old values out.
     SUV_N_01 = [24112.53, 27057.20, 28927.80, 31733.00, 31394.60, 31100.07]
@@ -861,54 +936,40 @@ def draw_recovery_coefficients():
     SUV_N_07 = [20438.00, 25366.53, 27110.00, 30185.53, 31237.40, 31706.07]
     SUV_N_08 = [20131.80, 25170.27, 26933.20, 26933.20, 29963.80, 31056.60]
     activity_conc_at_scan_start = 28136.08 # calculated the activity with the measured injected_activity and the decay constant of F-18 (in Bq)
-    # activity_conc_at_scan_end = 25593.21
+    activity_conc_at_scan_end = 25593.21
     # take the true activtiy concentration as the average of the activity concentration at the start and end of the scan
     # reason: can't decay-correct as usual since it is a static image and not a dynamic one
-    # true_activity_conc = ((activity_conc_at_scan_start - activity_conc_at_scan_end) / 2) + activity_conc_at_scan_end
+    true_activity_conc = ((activity_conc_at_scan_start - activity_conc_at_scan_end) / 2) + activity_conc_at_scan_end
     
     
-    # Divide all the values of the 8 arrays by activity_conc_at_scan_start
-    SUV_N_01 = [value / activity_conc_at_scan_start for value in SUV_N_01]
-    SUV_N_02 = [value / activity_conc_at_scan_start for value in SUV_N_02]
-    SUV_N_03 = [value / activity_conc_at_scan_start for value in SUV_N_03]
-    SUV_N_04 = [value / activity_conc_at_scan_start for value in SUV_N_04]
-    SUV_N_05 = [value / activity_conc_at_scan_start for value in SUV_N_05]
-    SUV_N_06 = [value / activity_conc_at_scan_start for value in SUV_N_06]
-    SUV_N_07 = [value / activity_conc_at_scan_start for value in SUV_N_07]
-    SUV_N_08 = [value / activity_conc_at_scan_start for value in SUV_N_08]
+    # Reshape recovery_coefficients to a 2D array where each row is a set of 6 coefficients
+    recovery_coefficients_reshaped = np.reshape(recovery_coefficients, (-1, 6))
+    
+    # Create figure and axis locally
+    fig, ax = plt.subplots()
+    
+    # Plot each set of recovery coefficients
+    for i, recovery_coeffs in enumerate(recovery_coefficients_reshaped):
+        ax.plot(voi_sizes, recovery_coeffs, marker='o', label=f'Iteration {i + 1}')
+    
+    ax.set_xlabel('Sphere Size [mm]')
+    ax.set_ylabel('Recovery Coefficient [1]')
+    ax.set_title('Recovery Coefficients vs Sphere Size')
+    ax.grid(True)
+    ax.legend()
 
-    # Plot each SUV array against the voi_sizes
-    plt.figure('Recovery Coefficients')
-    plt.plot(sphere_sizes, SUV_N_01, marker='o', label='Recon 1')
-    plt.plot(sphere_sizes, SUV_N_02, marker='o', label='Recon 2')
-    plt.plot(sphere_sizes, SUV_N_03, marker='o', label='Recon 3')
-    plt.plot(sphere_sizes, SUV_N_04, marker='o', label='Recon 4')
-    plt.plot(sphere_sizes, SUV_N_05, marker='o', label='Recon 5')
-    plt.plot(sphere_sizes, SUV_N_06, marker='o', label='Recon 6')
-    plt.plot(sphere_sizes, SUV_N_07, marker='o', label='Recon 7')
-    plt.plot(sphere_sizes, SUV_N_08, marker='o', label='Recon 8')
+    # Get the parent directory of loaded_folder_path
+    parent_directory = os.path.dirname(loaded_folder_path)
 
-    # Add labels and legend
-    plt.xlabel('VOI Size [mm]')
-    plt.ylabel('Normalized SUV')
-    plt.title('Recovery Coefficients vs VOI Size')
-    plt.legend()
-    plt.grid(True)
-    plt.xticks(sphere_sizes)  # Set x-ticks to the exact sphere sizes
+    # Save the plot as PNG and pickle
+    png_path = os.path.join(parent_directory, f'Recovery_coefficients_vs_sphere_size.png')
+    pickle_path = os.path.join(parent_directory, f'Recovery_coefficients_vs_sphere_size.pickle')
+
+    plt.savefig(png_path)
+    with open(pickle_path, 'wb') as f:
+        pickle.dump(plt.gcf(), f)
+
     plt.show()
-    if False:
-        # Get the parent directory of loaded_folder_path
-        parent_directory = os.path.dirname(loaded_folder_path)
-
-        # Save the plot as PNG and pickle
-        png_path = os.path.join(parent_directory, f'Recovery_coefficients_vs_sphere_size.png')
-        pickle_path = os.path.join(parent_directory, f'Recovery_coefficients_vs_sphere_size.pickle')
-
-        plt.savefig(png_path)
-        with open(pickle_path, 'wb') as f:
-            pickle.dump(plt.gcf(), f)
-
-        plt.show()
 
     #plt.show()  # Show the plot and block interaction until closed
     #plt.close(fig)  # Ensure the figure is closed after displaying
@@ -1001,6 +1062,10 @@ def create_gui():
     # Show Plot Button
     show_plot_button = tk.Button(root, text="Show Plot", command=show_plot)
     show_plot_button.pack(side=tk.LEFT, padx=25, pady=10)
+
+    # Calculate Noise for different VOI sizes Button
+    noise_vs_sphere_size_button = tk.Button(root, text="Calculate Noise", command=noise_vs_sphere_size)
+    noise_vs_sphere_size_button.pack(side=tk.LEFT, padx=30, pady=10)
 
     # Label for displaying the maximum pixel value
     max_pixel_label = tk.Label(root, text="Max Pixel Value: N/A")
