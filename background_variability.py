@@ -5,7 +5,7 @@
 # 4. Repeat step 2 and 3 for different reconstructions
 # 5. When all the reconstructed images are loaded, click on the "Draw Plot" button to plot the recovery coefficients. Note: this will only save the plot, but not show it yet
 # 6. Click on the "Show Plot" button to display the plot
-
+import concurrent.futures
 import pydicom
 import os
 import tkinter as tk
@@ -419,18 +419,18 @@ def get_mean_value(image_stack, mask):
 
 def calculate_SUV_N():
     process_rois_for_predefined_centers('roi') # initialize the 2D ROI mask
-    suv_peak_values = suv_peak_with_spherical_voi() # Get the SUV_peak with 2D ROI mask (3D is computationally too expensive)
+    #suv_peak_values = suv_peak_with_spherical_voi() # Get the SUV_peak with 2D ROI mask (3D is computationally too expensive)
     process_rois_for_predefined_centers('voi') # update the 2D ROI mask to be a 3D VOI mask for SUV_N calculation
     global dicom_images, current_index, roi_masks, iteration_count, loaded_folder_path
-    sphere_sizes = [10, 13, 17, 22, 28, 37]  # Example sphere sizes
+    sphere_sizes = [10, 13, 17, 22, 28, 37]  # Sphere sizes
     results = {size: [] for size in sphere_sizes}  # Dictionary to store results for each sphere size
-    
-    while True:
-        image_stack = build_image_stack()
-        roi_masks_array = np.array(roi_masks)
-        print(f"Shape of roi_masks_array: {roi_masks_array.shape}")
+    image_stack = build_image_stack()
+    roi_masks_array = np.array(roi_masks)
+    print(f"Shape of roi_masks_array: {roi_masks_array.shape}")
+    while True:    
+        
         # Extract the relevant slice from the image stack
-        current_slice = image_stack[current_index]
+        #current_slice = image_stack[current_index]
         # Extract the top N pixel values where roi_masks is True
         # Plot for SUV_N vs N for different spheres
         # Loop over each sphere in roi_masks_array
@@ -450,7 +450,7 @@ def calculate_SUV_N():
                 print(f"SUV_{N} for sphere size {sphere_size} mm: {mean_top_N:.2f} Bq/mL")
 
         # Update plot
-        load_more_data = plot_SUV_N(sphere_sizes, results, suv_peak_values)
+        load_more_data = plot_SUV_N(sphere_sizes, results)#, suv_peak_values)
         if not load_more_data:
             break
         # More data to plot
@@ -488,34 +488,37 @@ def calculate_SUV_N():
         
         
 
-def plot_SUV_N(sphere_sizes, results, suv_peak_values):
+def plot_SUV_N(sphere_sizes, results):#, suv_peak_values):
     global SUV_max_values, loaded_folder_path
 
     # Takes the first 6 values (i.e. the SUV_peak of the 6 spheres)
-    suv_peak_values = [details['max_mean'] for details in suv_peak_values.values()][:6] 
+    #suv_peak_values = [details['max_mean'] for details in suv_peak_values.values()][:6] 
     
     # Add SUV_max_values to the beginning of the results for each sphere size
     for i, sphere_size in enumerate(sphere_sizes):
         results[sphere_size].insert(0, SUV_max_values[i])
 
     # Add suv_peak_values to the results for each sphere size
-    for i, sphere_size in enumerate(sphere_sizes):
-        results[sphere_size].append(suv_peak_values[i])
+    #for i, sphere_size in enumerate(sphere_sizes):
+    #    results[sphere_size].append(suv_peak_values[i])
     
     # Normalize the SUV_max/SUV_N/SUV_peak values with formula (1) provided in https://doi.org/10.1007/s11604-021-01112-w
     phantom_weight =  12.6 # measured the water-filled NEMQ IQ phantom in kg (+-0.1 kg) (NEMA NU 2-2007)
-    injected_activity = 2729200 # measured the injected activity in Bq
+    #injected_activity = 2729200 # measured the injected activity in Bq
+    injected_activity = 1267756 # true activity conc at scan start * 48.45 mL (total volume of all spheres)
     activty_conc_at_scan_start = 28136.08 # calculated the activity with the measured injected_activity and the decay constant of F-18 (in Bq)
     activity_conc_at_scan_end = 25593.21
     # take the true activtiy concentration as the average of the activity concentration at the start and end of the scan
     # reason: can't decay-correct as usual since it is a static image and not a dynamic one
-    true_activity_conc = ((activty_conc_at_scan_start - activity_conc_at_scan_end) / 2) + activity_conc_at_scan_end
+    #true_activity_conc = ((activty_conc_at_scan_start - activity_conc_at_scan_end) / 2) + activity_conc_at_scan_end
+    true_activity_concentration = 26166.28 #Calculated the theoretical activity at scan start (Daniel, 05. Nov. 2024 11:36 am)
+        
     # measured activity concentration in Bq/mL / (injected activity in Bq / phantom weight in kg)    
-    for sphere_size in sphere_sizes:
-        results[sphere_size] = [value / (injected_activity * phantom_weight) for value in results[sphere_size]]
+    #for sphere_size in sphere_sizes:
+    #    results[sphere_size] = [value / (injected_activity * phantom_weight) for value in results[sphere_size]]
     
     # Normalize the SUV_max/SUV_N/SUV_peak values with formula (1) and (2) provided in https://doi.org/10.1007/s11604-021-01112-w
-    SUV_ref = true_activity_conc / (injected_activity * phantom_weight) # true activity concentration in Bq/mL / (injected activity in Bq / phantom weight in kg)
+    SUV_ref = true_activity_concentration #Try not normalizing SUV_ref because SUV_N has also the same normalization and they just cancel each other out / (injected_activity * phantom_weight) # true activity concentration in Bq/mL / (injected activity in Bq / phantom weight in kg)
     for sphere_size in sphere_sizes:
         results[sphere_size] = [((value - SUV_ref) / SUV_ref) * 100 for value in results[sphere_size]]
 
@@ -535,16 +538,16 @@ def plot_SUV_N(sphere_sizes, results, suv_peak_values):
 
 
     # Define x-axis labels
-    x_labels = [r'SUV$_{max}$'] + [f'SUV$_{{{N}}}$' for N in range(5, 45, 5)] + [r'SUV$_{peak}$']
+    x_labels = [r'SUV$_{max}$'] + [f'SUV$_{{{N}}}$' for N in range(5, 45, 5)] # + [r'SUV$_{peak}$']
    
     # Plot the SUV_peak against the sphere size
     plt.figure('SUV$_{N}$ Plot')
     for sphere_size in sphere_sizes:
-        plt.plot(range(0, 50, 5), results[sphere_size], marker='o', label=f'Sphere size: {sphere_size} mm')
+        plt.plot(range(0, 45, 5), results[sphere_size], marker='o', label=f'Sphere size: {sphere_size} mm') #50
     plt.xlabel('Mode of SUV')
     plt.ylabel(r'$\Delta$SUV [%]')
     plt.title('Different Modes of SUV')
-    plt.xticks(range(0, 50, 5), x_labels)  # Set x-ticks to the defined labels
+    plt.xticks(range(0, 45, 5), x_labels)  # 50 Set x-ticks to the defined labels
     plt.legend()
     plt.grid(True)
     parent_directory = os.path.dirname(loaded_folder_path)
@@ -610,17 +613,36 @@ def suv_peak_with_spherical_voi():
 
     # Initialize a dictionary to store the maximum mean value for each z-coordinate
     max_values_per_slice = {z: {'max_mean': 0, 'position': None} for z in range(image_stack.shape[0])}
+    def process_index(index):
+        z, y, x = index
+        if can_place_sphere(index, radius_pixels, roi_masks_array):
+            mask = create_3d_spherical_mask(index, radius_pixels, image_stack.shape)
+            mean_value = get_mean_value(image_stack, mask)
+            return z, mean_value, (y, x)
+        return None
 
-    # Loop through each index where roi_masks is True
-    for z, y, x in np.argwhere(roi_masks_array):
-        #if 1 <= z <= 6:  # Only consider z values from 1 to 6 (the number of spheres)
-            index = (z, y, x)
-            if can_place_sphere(index, radius_pixels):
-                mask = create_3d_spherical_mask(index, radius_pixels, image_stack.shape)
-                mean_value = get_mean_value(image_stack, mask)
+    # Use ThreadPoolExecutor to parallelize the processing
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = [executor.submit(process_index, index) for index in np.argwhere(roi_masks_array)]
+        for future in concurrent.futures.as_completed(futures):
+            result = future.result()
+            if result:
+                z, mean_value, position = result
                 if mean_value > max_values_per_slice[z]['max_mean']:
                     max_values_per_slice[z]['max_mean'] = mean_value
-                    max_values_per_slice[z]['position'] = (y, x)  # Store the y, x position for the max value
+                    max_values_per_slice[z]['position'] = position
+
+    if False:
+        # Loop through each index where roi_masks is True
+        for z, y, x in np.argwhere(roi_masks_array):
+            #if 1 <= z <= 6:  # Only consider z values from 1 to 6 (the number of spheres)
+                index = (z, y, x)
+                if can_place_sphere(index, radius_pixels):
+                    mask = create_3d_spherical_mask(index, radius_pixels, image_stack.shape)
+                    mean_value = get_mean_value(image_stack, mask)
+                    if mean_value > max_values_per_slice[z]['max_mean']:
+                        max_values_per_slice[z]['max_mean'] = mean_value
+                        max_values_per_slice[z]['position'] = (y, x)  # Store the y, x position for the max value
 
     # Print results for each slice
     for z, details in max_values_per_slice.items():
@@ -685,19 +707,19 @@ def plot_suv_peak_against_sphere_size(suv_peak_values, sphere_sizes):
         print(f"SUV_peak: Max mean value: {max_mean_value} at position {max_position}")
         return max_mean_value, max_position    
 
-def can_place_sphere(center, radius_pixels):
+def can_place_sphere(center, radius_pixels, roi_masks_array):
     """
     Check if a sphere with given radius can be placed within the 2D ROI.
     center: (x_center, y_center) - Center of the sphere in the 2D image.
     radius_pixels: Radius of the sphere in pixels.
     roi_mask: 2D boolean array where True values indicate the ROI.
     """
-    global roi_masks
+    #global roi_masks
 
     z_center, y_center, x_center = center
     
     # Convert roi_masks to a NumPy array
-    roi_masks_array = np.array(roi_masks)
+    #roi_masks_array = np.array(roi_masks)
     depth, height, width = roi_masks_array.shape
     if False:
         # Check if all points within the sphere's radius are within the ROI and image boundaries
@@ -724,7 +746,7 @@ def create_3d_spherical_mask(center, radius_pixels, shape):
     """
     global current_index
     z_center, y_center, x_center = center
-    z_center += current_index  # Add current_index to z_center
+    #z_center += current_index  # Add current_index to z_center
     depth, height, width = shape
     print(f"Shape of the spherical mask: {shape}")
     print(f"Center of the sphere: z: {z_center}, y: {y_center}, x: {x_center}")
@@ -790,8 +812,9 @@ def create_isocontour_voi_3d(img_array, center, radius, threshold):
 
 
 def process_rois_for_predefined_centers(roi_or_voi = 'roi'):
-    global roi_masks, current_index, SUV_max_values
+    global roi_masks, current_index, SUV_max_values, dicom_images
     image_stack = build_image_stack()
+    shape = image_stack.shape
     selected_slice = image_stack[current_index]
     print(f"Selected slice: {selected_slice}")
     print(f"Maximum of selected slice: {np.max(selected_slice)}")
@@ -800,27 +823,39 @@ def process_rois_for_predefined_centers(roi_or_voi = 'roi'):
     # centers = [(200, 165), (189, 190), (160, 194), (144, 171), (154, 146), (183, 142)] 
     if roi_or_voi == 'roi':
         # Centers of 6 2D spheres with a 512x512 image size, increasing sphere sizes
-        centers = [(209, 270), (217, 228), (257, 214), (287, 242), (280, 282), (242, 298)]
+        centers = [(212, 272), (218, 229), (257, 214), (287, 242), (280, 282), (242, 298)]
     else:
         # Centers of 6 3D spheres with a 512x512 image size, increasing sphere sizes
-        centers = [(current_index, 209, 270), (current_index, 217, 228), (current_index, 257, 214), (current_index, 287, 242), (current_index, 280, 282), (current_index, 242, 298)]
+        centers = [(current_index, 212, 272), (current_index, 218, 229), (current_index, 257, 214), (current_index, 287, 242), (current_index, 280, 282), (current_index, 242, 298)]
     radius = 15  # Covers even the biggest sphere with a diameter of 18.5 pixels (times approx. 2 mm pixel_spacing = 37 mm sphere)
     roi_masks = []
     # roi_pixels = []  # Initialize roi_pixels as an empty list
 
 
-    for center in centers:
+    for i, center in enumerate(centers):
         # Assuming a threshold of 40% of the max value within each sphere's bounding box
         #local_max = np.max(selected_slice[
         #    max(0, center[0] - radius):min(selected_slice.shape[0], center[0] + radius),
         #    max(0, center[1] - radius):min(selected_slice.shape[1], center[1] + radius)
         #])
-        true_activity_concentration = 28136.08 #Calculated the theoretical activity at scan start (Daniel, 10. Oct. 2024 12:22 pm)
+        #true_activity_concentration = 28136.08 #Calculated the theoretical activity at scan start (Daniel, 10. Oct. 2024 12:22 pm)
+        true_activity_concentration = 26166.28 #Calculated the theoretical activity at scan start (Daniel, 05. Nov. 2024 11:36 am)
+        # Calculate the radius in pixels (assuming isotropic pixels)
+        
+
         threshold = 0.4 * true_activity_concentration #local_max
         if roi_or_voi == 'roi':
             roi_mask_temp = create_isocontour_roi(selected_slice, center, radius, threshold)
         else:
-            roi_mask_temp = create_isocontour_voi_3d(image_stack, center, radius, threshold)
+            #Following line commented out because isocontour threshold didn't perfectly delineate the sphere
+            #roi_mask_temp = create_isocontour_voi_3d(image_stack, center, radius, threshold)
+            sphere_sizes = [10, 13, 17, 22, 28, 37]
+            radius_mm = sphere_sizes[i] / 2
+            
+            # Read in the pixel size of the DICOM image
+            pixel_spacing = dicom_images[0][0x0028, 0x0030].value
+            radius_pixels = radius_mm / pixel_spacing[0]
+            roi_mask_temp = create_3d_spherical_mask(center, radius_pixels, shape)
         print(f"VOI {len(roi_masks) + 1} - Threshold: {threshold:.2f}, Max Value: {true_activity_concentration:.2f}, Number of Pixels: {np.sum(roi_mask_temp)}")
         roi_masks.append(roi_mask_temp)
     print(f"roi_masks: {roi_masks}")

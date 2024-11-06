@@ -511,7 +511,7 @@ def plot_SUV_N(sphere_sizes, results, suv_peak_values):
         results[sphere_size] = [value / (injected_activity * phantom_weight) for value in results[sphere_size]]
     
     # Normalize the SUV_max/SUV_N/SUV_peak values with formula (1) and (2) provided in https://doi.org/10.1007/s11604-021-01112-w
-    SUV_ref = activty_at_scan_start / (injected_activity * phantom_weight) # true activity concentration in Bq/mL / (injected activity in Bq / phantom weight in kg)
+    SUV_ref = activty_at_scan_start #Try not normalizing SUV_ref because SUV_N has also the same normalization and they just cancel each other out / (injected_activity * phantom_weight) # true activity concentration in Bq/mL / (injected activity in Bq / phantom weight in kg)
     for sphere_size in sphere_sizes:
         results[sphere_size] = [((value - SUV_ref) / SUV_ref) * 100 for value in results[sphere_size]]
 

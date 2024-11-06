@@ -40,8 +40,13 @@ def load_dicom_images(directory):
     dicom_images = []
     for filename in os.listdir(directory):
         filepath = os.path.join(directory, filename)
-        dicom_image = pydicom.dcmread(filepath)
-        dicom_images.append(dicom_image)
+        try:
+            dicom_image = pydicom.dcmread(filepath)
+            dicom_images.append(dicom_image)
+        except FileNotFoundError:
+            print(f"File not found: {filepath}")
+        except Exception as e:
+            print(f"Error reading {filepath}: {e}")
 
     #print(f"Pixel array of dicom images in load_dicom_images: {dicom_images[0].pixel_array}")
     #print(f"Five maximal values of the 62nd DICOM image: {np.sort(dicom_images[61].pixel_array.flatten())[-5:]}")
@@ -529,16 +534,31 @@ def plot_SUV_N(sphere_sizes, results, suv_peak_values):
     plt.legend()
     plt.grid(True)
     plt.show()
+    # Calculate and print the absolute sum of the results for each sphere size
+    for sphere_size in sphere_sizes:
+        abs_sum = sum(abs(value) for value in results[sphere_size])
+        print(f"Absolute sum of results for sphere size {sphere_size} mm: {abs_sum:.2f}")
+    
+    # Calculate and print the absolute sum of the results for each index across all sphere sizes
+    num_values = len(results[sphere_sizes[0]])  # Assuming all sphere sizes have the same number of values
+    abs_sums = []
+    for idx in range(num_values):
+        abs_sum = sum(abs(results[sphere_size][idx]) for sphere_size in sphere_sizes)
+        abs_sums.append(abs_sum)
+        print(f"Absolute sum of results for index {idx + 1}: {abs_sum:.2f}")
+
     # Ask user to load more data or not
     answer = messagebox.askyesno("Load More Data", "Do you want to load more data?")
-    if not answer:
-        parent_directory = os.path.dirname(loaded_folder_path)
-        png_path = os.path.join(parent_directory, 'SUV_N_plot.png')
-        pickle_path = os.path.join(parent_directory, 'SUV_N_plot.pickle')
-        plt.savefig(png_path)
-        with open(pickle_path, 'wb') as f:
-            pickle.dump(plt.gcf(), f)
-        plt.show()
+    if not answer:        
+        # Plot the abs_sum values against the x_labels
+        plt.figure('Summed Absolute Error Plot')
+        plt.plot(range(num_values), abs_sums, marker='o')
+        plt.xlabel('Mode of SUV')
+        plt.ylabel(r'Summed Absolute $\Delta$SUV [%]')
+        plt.title('SUV Mode Dependent Error')
+        plt.xticks(range(num_values), x_labels)  # Set x-ticks to the defined labels
+        plt.grid(True)
+        
         return False
     else:
         return True
@@ -687,9 +707,9 @@ def noise_vs_sphere_size():
     #center = (0, 209, 270) # for the z value, the method create_3d_spherical_mask is adjusted to add the current_index (i.e. the slice number)
     #center = (0, 242, 298) # biggest sphere center position
     # Centers of 6 3D spheres with a 512x512 image size, increasing sphere sizes
-    #centers = [(0, 209, 270), (0, 217, 228), (0, 257, 214), (0, 287, 242), (0, 280, 282), (0, 242, 298)]
+    centers = [(0, 212, 272), (0, 217, 228), (0, 257, 214), (0, 287, 242), (0, 280, 282), (0, 242, 298)]
     # Centers of 6 3D spheres with a 344x344 image size, increasing sphere sizes
-    centers = [(0, 142, 183), (0, 146, 154), (0, 172, 144), (0, 194, 161), (0, 190, 189), (0, 165, 200)] 
+    # centers = [(0, 142, 183), (0, 146, 154), (0, 172, 144), (0, 194, 161), (0, 190, 189), (0, 165, 200)] 
     
     plot_line_profiles(image_stack, centers)
 
@@ -698,7 +718,8 @@ def noise_vs_sphere_size():
     masks = []
     mean_values = []
     ir_values = [] # image roughness values (i.e. the noise)
-
+    #ir_value = get_ir_value(image_stack, mask)
+    
     for center in centers:
         for voi in voi_sizes:
             mask = create_3d_spherical_mask(center, voi, shape)
@@ -714,7 +735,11 @@ def noise_vs_sphere_size():
         # Reset the masks and mean values after plotting them for the current sphere
         masks = []
         mean_values = []
-    activity_conc_at_scan_start = 28136.08 # calculated the activity with the measured injected_activity and the decay constant of F-18 (in Bq)
+    
+    ir_values = get_ir_value(image_stack, masks)
+
+    #activity_conc_at_scan_start = 28136.08 # calculated the activity with the measured injected_activity and the decay constant of F-18 (in Bq)
+    activity_conc_at_scan_start = 26166.28 # [Bq/mL]. Scan from the 05.11.2024, scan start: 11:36:57 am
     activity_conc_at_scan_end = 25593.21
     # take the true activtiy concentration as the average of the activity concentration at the start and end of the scan
     # reason: can't decay-correct as usual since it is a static image and not a dynamic one
@@ -722,7 +747,7 @@ def noise_vs_sphere_size():
     print(f"True activity concentration: {activity_conc_at_scan_start:.2f} Bq/mL")
     plt.show()
 
-def get_ir_value(image_stack, mask, sphere_index):
+def get_ir_value(masks):
     """
     Calculate the image roughness within the mask (i.e. one sphere) for all recons
     Followed fromula (3) of http://dx.doi.org/10.1088/0031-9155/55/5/013
@@ -734,10 +759,21 @@ def get_ir_value(image_stack, mask, sphere_index):
     sphere_index: Index of the sphere to access the correct SUV_N values.
     """
     global current_index
+    image_stack = build_image_stack()
     
-    
-    # Earlier calculated SUV_N values for N = 15 for the different sphere sizes at recon Phantom-01/-02/-03/-......
+    # Earlier calculated SUV_N values for N = 15 for the different sphere sizes at recon NEMA_IQ_01/_02/_03/_......
     # Do not delete or change these values. If you want to update the values, comment the old values out.
+    SUV_N = [
+        [24112.53, 27057.20, 28927.80, 31733.00, 31394.60, 31100.07], #NEMA_IQ_01
+        [23197.80, 26127.93, 28382.27, 31224.20, 31661.93, 31961.00], #NEMA_IQ_02
+        [22330.27, 25897.73, 27985.33, 30909.07, 31821.67, 32160.80], #NEMA_IQ_03
+        [21833.73, 25974.00, 27838.13, 30907.33, 31895.27, 32314.60], #NEMA_IQ_04
+        [21341.13, 25854.53, 27627.93, 30744.87, 31737.33, 32199.73], #NEMA_IQ_05
+        [20835.33, 25594.93, 27327.27, 30440.73, 31461.13, 31928.67], #NEMA_IQ_06
+        [20438.00, 25366.53, 27110.00, 30185.53, 31237.40, 31706.07], #NEMA_IQ_07
+        [20131.80, 25170.27, 26933.20, 26933.20, 29963.80, 31056.60] #NEMA_IQ_08
+    ]
+    '''
     SUV_N = [
         [24112.53, 27057.20, 28927.80, 31733.00, 31394.60, 31100.07], #SUV_N_01
         [23197.80, 26127.93, 28382.27, 31224.20, 31661.93, 31961.00], #SUV_N_02
@@ -748,40 +784,57 @@ def get_ir_value(image_stack, mask, sphere_index):
         [20438.00, 25366.53, 27110.00, 30185.53, 31237.40, 31706.07], #SUV_N_07
         [20131.80, 25170.27, 26933.20, 26933.20, 29963.80, 31056.60] #SUV_N_08
     ]
+    '''
     
     recon_names = ['Recon 1', 'Recon 2', 'Recon 3', 'Recon 4', 'Recon 5', 'Recon 6', 'Recon 7', 'Recon 8']
-    ir_values_per_sphere = []
-
-    # Loop through each mask and calculate IR values
-    for sphere_index, mask in enumerate(masks):
+    ir_values_per_recon = []
+    # Iterate through each mask (each corresponding to a different sphere size)
+    for mask_index, mask in enumerate(masks):
+        ir_values = []
+        
+        # Extract pixel values from the image stack where mask is True
         z_coords, y_coords, x_coords = np.where(mask)
         pixel_values = image_stack[z_coords, y_coords, x_coords]
-        number_of_pixels = np.sum(mask)
-        ir_values = []
 
-        # Get the mean SUV values for the current sphere across all recons
-        mean_of_sphere_recons = [suv[sphere_index] for suv in SUV_N]
-
-        # Calculate image roughness for each recon
-        for mean_value in mean_of_sphere_recons:
-            temp_value = np.sum((pixel_values - mean_value) ** 2)
-            ir = (np.sqrt((1 / (number_of_pixels - 1)) * temp_value)) / mean_value
+        # Calculate image roughness for each reconstruction
+        for recon_index, suv_values in enumerate(SUV_N):
+            mean_suv = suv_values[mask_index]  # Mean SUV value for this sphere in this recon
+            temp_value = np.sum((pixel_values - mean_suv) ** 2)
+            ir = np.sqrt(temp_value / (np.sum(mask) - 1)) / mean_suv
             ir_values.append(ir)
+        
+        ir_values_per_recon.append(ir_values)
+    if False:
+        # Loop through each mask and calculate IR values
+        for mask_index, mask in enumerate(masks):
+            z_coords, y_coords, x_coords = np.where(mask)
+            pixel_values = image_stack[z_coords, y_coords, x_coords]
+            number_of_pixels = np.sum(mask)
+            ir_values = []
 
-    ir_values_per_sphere.append(ir_values)
+            # Get the mean SUV values for the current sphere across all recons
+            mean_of_sphere_recons = [suv[sphere_index] for suv in SUV_N]
 
-    plot_ir_values(ir_values)
+            # Calculate image roughness for each recon
+            for mean_value in mean_of_sphere_recons:
+                temp_value = np.sum((pixel_values - mean_value) ** 2)
+                ir = (np.sqrt((1 / (number_of_pixels - 1)) * temp_value)) / mean_value
+                ir_values.append(ir)
 
-def plot_ir_values(ir_values):
-    global iteration_count
-    recon_names = ['Phantom-01', 'Phantom-02', 'Phantom-03', 'Phantom-04', 'Phantom-05', 'Phantom-06', 'Phantom-07', 'Phantom-08']
-    plt.figure(f'Image Roughness vs Reconstruction {iteration_count + 1}')
-    plt.plot(recon_names, ir_values, marker='o')
+        ir_values_per_sphere.append(ir_values)
+
+    plot_ir_values(ir_values_per_recon)
+
+def plot_ir_values(ir_values_per_recon):
+    #global iteration_count
+    recon_names = ['NEMA_IQ_01', 'NEMA_IQ_02', 'NEMA_IQ_03', 'NEMA_IQ_04', 'NEMA_IQ_05', 'NEMA_IQ_06', 'NEMA_IQ_07', 'NEMA_IQ_08']
+    plt.figure(f'Image Roughness vs Reconstruction')
+    plt.plot(recon_names, ir_values_per_recon, marker='o')
     plt.xlabel('Reconstruction')
     plt.ylabel('Image Roughness')
     plt.title('Image Roughness vs Reconstruction')
     plt.grid(True)
-    iteration_count += 1
+    #iteration_count += 1
 
 def plot_mean_vs_sphere_size(voi_sizes, mean_values):
     global dicom_images, iteration_count
@@ -979,7 +1032,8 @@ def process_rois_for_predefined_centers(roi_or_voi = 'roi'):
         #    max(0, center[0] - radius):min(selected_slice.shape[0], center[0] + radius),
         #    max(0, center[1] - radius):min(selected_slice.shape[1], center[1] + radius)
         #])
-        true_activity_concentration = 28136.08 #Calculated the theoretical activity at scan start (Daniel, 10. Oct. 2024 12:22 pm)
+        #true_activity_concentration = 28136.08 #Calculated the theoretical activity at scan start (Daniel, 10. Oct. 2024 12:22 pm)
+        true_activity_concentration = 26166.28 #Calculated the theoretical activity at scan start (Daniel, 05. Nov. 2024 11:36 am)
         threshold = 0.4 * true_activity_concentration #local_max
         if roi_or_voi == 'roi':
             roi_mask_temp = create_isocontour_roi(selected_slice, center, radius, threshold)
@@ -1193,7 +1247,9 @@ def create_gui():
     # VOI Processing Button
     process_voi_button = tk.Button(root, text="Isocontour detection", command=process_rois_for_predefined_centers)
     process_voi_button.pack(side=tk.LEFT, padx=20, pady=10)
-
+    # Get Image Roughness Plot
+    get_image_roughness_button = tk.Button(root, text="Get Image Roughness", command=get_ir_value)
+    get_image_roughness_button.pack(side=tk.LEFT, padx=20, pady=10)
     # Draw RC Button
     draw_recovery_coefficients_button = tk.Button(root, text="Draw Recovery Coefficients", command=draw_recovery_coefficients)
     draw_recovery_coefficients_button.pack(side=tk.LEFT, padx=25, pady=10)
@@ -1229,7 +1285,7 @@ def create_gui():
     # Add "Calculate SUV_N" button
     suv_n_button = tk.Button(root, text="Calculate SUV_N", command=lambda: calculate_SUV_N())
     suv_n_button.pack(side=tk.TOP, padx=10, pady=10)
-
+ 
     # ROI Input panel for 12 ROIs arranged in a 3x4 grid
     roi_panel = tk.Frame(root)
     roi_panel.pack(side=tk.BOTTOM, fill=tk.X, padx=10, pady=10)
