@@ -761,18 +761,18 @@ def get_ir_value(masks):
     global current_index
     image_stack = build_image_stack()
     
-    # Earlier calculated SUV_N values for N = 15 for the different sphere sizes at recon NEMA_IQ_01/_02/_03/_......
+    # Earlier calculated SUV_N values for N = 40 for the different sphere sizes at recon NEMA_IQ_01/_02/_03/_......
     # Do not delete or change these values. If you want to update the values, comment the old values out.
     SUV_N = [
         # These are the SUV_N values for my NEMA IQ scan with background activity (ratio 1:4) from the 05.11.2024
-        [24112.53, 27057.20, 28927.80, 31733.00, 31394.60, 31100.07], #NEMA_IQ_01
-        [23197.80, 26127.93, 28382.27, 31224.20, 31661.93, 31961.00], #NEMA_IQ_02
-        [22330.27, 25897.73, 27985.33, 30909.07, 31821.67, 32160.80], #NEMA_IQ_03
-        [21833.73, 25974.00, 27838.13, 30907.33, 31895.27, 32314.60], #NEMA_IQ_04
-        [21341.13, 25854.53, 27627.93, 30744.87, 31737.33, 32199.73], #NEMA_IQ_05
-        [20835.33, 25594.93, 27327.27, 30440.73, 31461.13, 31928.67], #NEMA_IQ_06
-        [20438.00, 25366.53, 27110.00, 30185.53, 31237.40, 31706.07], #NEMA_IQ_07
-        [20131.80, 25170.27, 26933.20, 26933.20, 29963.80, 31056.60] #NEMA_IQ_08
+        [11217.52, 18049.38, 24637.45, 27948.10, 29819.10, 32157.55], #NEMA_IQ_01
+        [13341.70, 23084.22, 29678.75, 30543.72, 31378.25, 31764.33], #NEMA_IQ_02
+        [15063.55, 25432.20, 31010.53, 30502.62, 31531.20, 31496.33], #NEMA_IQ_03
+        [16082.25, 26268.30, 30999.67, 30034.17, 31217.08, 31088.40], #NEMA_IQ_04
+        [16950.70, 26895.42, 31082.22, 30094.42, 31345.62, 31257.05], #NEMA_IQ_05
+        [17579.17, 27225.28, 31013.72, 30144.60, 31482.20, 31500.88], #NEMA_IQ_06
+        [17914.97, 27191.67, 30674.42, 29999.25, 31397.58, 31506.95], #NEMA_IQ_07
+        [17977.90, 26831.17, 30076.20, 29603.53, 31029.97, 31203.60]  #NEMA_IQ_08
     ]
     '''
     These are the SUV_N values for N = 15 and my first NEMA IQ scan without background activity from the 10.10.2024

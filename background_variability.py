@@ -432,8 +432,8 @@ def get_mean_value(image_stack, mask):
     return np.mean(pixel_values)
 
 def calculate_SUV_N():
-    process_rois_for_predefined_centers('roi') # initialize the 2D ROI mask
-    suv_peak_values = suv_peak_with_spherical_voi() # Get the SUV_peak with 2D ROI mask (3D is computationally too expensive)
+    #process_rois_for_predefined_centers('roi') # initialize the 2D ROI mask
+    #suv_peak_values = suv_peak_with_spherical_voi() # Get the SUV_peak with 2D ROI mask (3D is computationally too expensive)
     process_rois_for_predefined_centers('voi') # update the 2D ROI mask to be a 3D VOI mask for SUV_N calculation
     global dicom_images, current_index, roi_masks, iteration_count, loaded_folder_path
     sphere_sizes = [10, 13, 17, 22, 28, 37]  # Sphere sizes
