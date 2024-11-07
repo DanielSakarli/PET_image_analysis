@@ -419,20 +419,21 @@ def get_mean_value(image_stack, mask):
     z_coords, y_coords, x_coords = np.where(mask)
     
     # Adjust the z coordinates by adding current_index
-    #adjusted_z_coords = z_coords + current_index
+    adjusted_z_coords = z_coords + current_index
     
     # Ensure the adjusted z coordinates are within bounds
-    #adjusted_z_coords = np.clip(adjusted_z_coords, 0, image_stack.shape[0] - 1)
+    adjusted_z_coords = np.clip(adjusted_z_coords, 0, image_stack.shape[0] - 1)
     
     # Extract the pixel values using the adjusted z, y, and x coordinates
-    pixel_values = image_stack[z_coords, y_coords, x_coords]
+    pixel_values = image_stack[adjusted_z_coords, y_coords, x_coords]
     
+    print(f"This is the slice of the mean calculation: {adjusted_z_coords} and this is the mean value of the slice: {np.mean(pixel_values)}")
     # Calculate and return the mean value of the pixel values
     return np.mean(pixel_values)
 
 def calculate_SUV_N():
     process_rois_for_predefined_centers('roi') # initialize the 2D ROI mask
-    #suv_peak_values = suv_peak_with_spherical_voi() # Get the SUV_peak with 2D ROI mask (3D is computationally too expensive)
+    suv_peak_values = suv_peak_with_spherical_voi() # Get the SUV_peak with 2D ROI mask (3D is computationally too expensive)
     process_rois_for_predefined_centers('voi') # update the 2D ROI mask to be a 3D VOI mask for SUV_N calculation
     global dicom_images, current_index, roi_masks, iteration_count, loaded_folder_path
     sphere_sizes = [10, 13, 17, 22, 28, 37]  # Sphere sizes
@@ -462,7 +463,7 @@ def calculate_SUV_N():
                 print(f"SUV_{N} for sphere size {sphere_size} mm: {mean_top_N:.2f} Bq/mL")
 
         # Update plot
-        load_more_data = plot_SUV_N(sphere_sizes, results)#, suv_peak_values)
+        load_more_data = plot_SUV_N(sphere_sizes, results, suv_peak_values)
         if not load_more_data:
             break
         # More data to plot
@@ -500,19 +501,19 @@ def calculate_SUV_N():
         
         
 
-def plot_SUV_N(sphere_sizes, results):#, suv_peak_values):
+def plot_SUV_N(sphere_sizes, results, suv_peak_values):
     global SUV_max_values, loaded_folder_path, iteration_count
 
     # Takes the first 6 values (i.e. the SUV_peak of the 6 spheres)
-    #suv_peak_values = [details['max_mean'] for details in suv_peak_values.values()][:6] 
+    suv_peak_values = [details['max_mean'] for details in suv_peak_values.values()][:6] 
     
     # Add SUV_max_values to the beginning of the results for each sphere size
     for i, sphere_size in enumerate(sphere_sizes):
         results[sphere_size].insert(0, SUV_max_values[i])
 
     # Add suv_peak_values to the results for each sphere size
-    #for i, sphere_size in enumerate(sphere_sizes):
-    #    results[sphere_size].append(suv_peak_values[i])
+    for i, sphere_size in enumerate(sphere_sizes):
+        results[sphere_size].append(suv_peak_values[i])
     
     # Normalize the SUV_max/SUV_N/SUV_peak values with formula (1) provided in https://doi.org/10.1007/s11604-021-01112-w
     phantom_weight =  12.6 # measured the water-filled NEMQ IQ phantom in kg (+-0.1 kg) (NEMA NU 2-2007)
@@ -550,16 +551,16 @@ def plot_SUV_N(sphere_sizes, results):#, suv_peak_values):
 
 
     # Define x-axis labels
-    x_labels = [r'SUV$_{max}$'] + [f'SUV$_{{{N}}}$' for N in range(5, 45, 5)] # + [r'SUV$_{peak}$']
+    x_labels = [r'SUV$_{max}$'] + [f'SUV$_{{{N}}}$' for N in range(5, 45, 5)] + [r'SUV$_{peak}$']
    
     # Plot the SUV_peak against the sphere size
     plt.figure('SUV$_{N}$ Plot')
     for sphere_size in sphere_sizes:
-        plt.plot(range(0, 45, 5), results[sphere_size], marker='o', label=f'Sphere size: {sphere_size} mm') #50
+        plt.plot(range(0, 50, 5), results[sphere_size], marker='o', label=f'Sphere size: {sphere_size} mm')
     plt.xlabel('Mode of SUV')
     plt.ylabel(r'$\Delta$SUV [%]')
     plt.title('Different Modes of SUV')
-    plt.xticks(range(0, 45, 5), x_labels)  # 50 Set x-ticks to the defined labels
+    plt.xticks(range(0, 50, 5), x_labels)  # Set x-ticks to the defined labels
     plt.legend()
     plt.grid(True)
     parent_directory = os.path.dirname(loaded_folder_path)
@@ -585,7 +586,7 @@ def plot_SUV_N(sphere_sizes, results):#, suv_peak_values):
         plt.ylabel(r'Summed Absolute $\Delta$SUV [%]')
         plt.title('SUV Mode Dependent Error')
         plt.xticks(range(num_values), x_labels)  # Set x-ticks to the defined labels
-        plt.ylim(90, 140)
+        plt.ylim(90, 180)
         plt.grid(True)
 
         # Add legend with the iteration counter in the title and entries
@@ -759,6 +760,29 @@ def can_place_sphere(center, radius_pixels, roi_masks_array):
     else:
         return False
 
+
+def create_2d_spherical_mask(center, radius_pixels, shape):
+    """
+    Create a 3D spherical mask.
+    center: (z_center, y_center, x_center) - Center of the sphere in the 3D image.
+    radius_pixels: Radius of the sphere in pixels.
+    num_slices: Number of slices the sphere covers.
+    shape: Shape of the 3D image stack.
+    """
+    global current_index
+    z_center, y_center, x_center = center
+    #z_center += current_index  # Add current_index to z_center
+    depth, height, width = shape
+    print(f"Shape of the spherical mask: {shape}")
+    print(f"Center of the sphere: z: {current_index}, y: {y_center}, x: {x_center}")
+    print(f"Radius of the sphere: {radius_pixels}")
+    
+    y, x = np.ogrid[:height, :width]
+    distance = np.sqrt((y - y_center)**2 + (x - x_center)**2)
+    #print(f"Distance of the sphere: {distance}")
+    mask = distance <= radius_pixels
+    return mask
+
 def create_3d_spherical_mask(center, radius_pixels, shape):
     """
     Create a 3D spherical mask.
@@ -846,14 +870,14 @@ def process_rois_for_predefined_centers(roi_or_voi = 'roi'):
     # centers = [(200, 165), (189, 190), (160, 194), (144, 171), (154, 146), (183, 142)] 
     if roi_or_voi == 'roi':
         # Centers of 6 2D spheres with a 512x512 image size, increasing sphere sizes
-        centers = [(212, 272), (218, 230), (257, 214), (289, 240), (283, 281), (244, 298)]
+        centers = [(current_index, 212, 272), (current_index, 218, 230), (current_index, 257, 214), (current_index, 289, 240), (current_index, 283, 281), (current_index, 245, 298)]
     else:
         # Centers of 6 3D spheres with a 512x512 image size, increasing sphere sizes
         centers = [(current_index, 212, 272), (current_index, 218, 230), (current_index, 257, 214), (current_index, 289, 240), (current_index, 283, 281), (current_index, 245, 298)]
     radius = 15  # Covers even the biggest sphere with a diameter of 18.5 pixels (times approx. 2 mm pixel_spacing = 37 mm sphere)
     roi_masks = []
     # roi_pixels = []  # Initialize roi_pixels as an empty list
-
+    sphere_sizes = [10, 13, 17, 22, 28, 37] # Sphere diameters in mm
 
     for i, center in enumerate(centers):
         # Assuming a threshold of 40% of the max value within each sphere's bounding box
@@ -868,11 +892,18 @@ def process_rois_for_predefined_centers(roi_or_voi = 'roi'):
 
         threshold = 0.4 * true_activity_concentration #local_max
         if roi_or_voi == 'roi':
-            roi_mask_temp = create_isocontour_roi(selected_slice, center, radius, threshold)
+            #Following line commented out because isocontour threshold didn't perfectly delineate the sphere
+            #roi_mask_temp = create_isocontour_roi(selected_slice, center, radius, threshold)
+            radius_mm = sphere_sizes[i] / 2
+            
+            # Read in the pixel size of the DICOM image
+            pixel_spacing = dicom_images[0][0x0028, 0x0030].value
+            radius_pixels = radius_mm / pixel_spacing[0]
+            roi_mask_temp = create_2d_spherical_mask(center, radius_pixels, shape)
         else:
             #Following line commented out because isocontour threshold didn't perfectly delineate the sphere
             #roi_mask_temp = create_isocontour_voi_3d(image_stack, center, radius, threshold)
-            sphere_sizes = [10, 13, 17, 22, 28, 37]
+            
             radius_mm = sphere_sizes[i] / 2
             
             # Read in the pixel size of the DICOM image

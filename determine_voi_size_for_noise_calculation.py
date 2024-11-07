@@ -764,6 +764,7 @@ def get_ir_value(masks):
     # Earlier calculated SUV_N values for N = 15 for the different sphere sizes at recon NEMA_IQ_01/_02/_03/_......
     # Do not delete or change these values. If you want to update the values, comment the old values out.
     SUV_N = [
+        # These are the SUV_N values for my NEMA IQ scan with background activity (ratio 1:4) from the 05.11.2024
         [24112.53, 27057.20, 28927.80, 31733.00, 31394.60, 31100.07], #NEMA_IQ_01
         [23197.80, 26127.93, 28382.27, 31224.20, 31661.93, 31961.00], #NEMA_IQ_02
         [22330.27, 25897.73, 27985.33, 30909.07, 31821.67, 32160.80], #NEMA_IQ_03
@@ -774,6 +775,7 @@ def get_ir_value(masks):
         [20131.80, 25170.27, 26933.20, 26933.20, 29963.80, 31056.60] #NEMA_IQ_08
     ]
     '''
+    These are the SUV_N values for N = 15 and my first NEMA IQ scan without background activity from the 10.10.2024
     SUV_N = [
         [24112.53, 27057.20, 28927.80, 31733.00, 31394.60, 31100.07], #SUV_N_01
         [23197.80, 26127.93, 28382.27, 31224.20, 31661.93, 31961.00], #SUV_N_02
@@ -786,7 +788,6 @@ def get_ir_value(masks):
     ]
     '''
     
-    recon_names = ['Recon 1', 'Recon 2', 'Recon 3', 'Recon 4', 'Recon 5', 'Recon 6', 'Recon 7', 'Recon 8']
     ir_values_per_recon = []
     # Iterate through each mask (each corresponding to a different sphere size)
     for mask_index, mask in enumerate(masks):
@@ -827,7 +828,7 @@ def get_ir_value(masks):
 
 def plot_ir_values(ir_values_per_recon):
     #global iteration_count
-    recon_names = ['NEMA_IQ_01', 'NEMA_IQ_02', 'NEMA_IQ_03', 'NEMA_IQ_04', 'NEMA_IQ_05', 'NEMA_IQ_06', 'NEMA_IQ_07', 'NEMA_IQ_08']
+    recon_names = ['1 iteration', '2 iterations', '3 iterations', '4 iterations', '5 iterations', '6 iterations', '7 iterations', '8 iterations']
     plt.figure(f'Image Roughness vs Reconstruction')
     plt.plot(recon_names, ir_values_per_recon, marker='o')
     plt.xlabel('Reconstruction')
