@@ -1,10 +1,20 @@
-# README: The usage of the script to plot several recovery coefficients of different reconstructions is as follows
+# README:
+# The usage of the script to plot several recovery coefficients of different reconstructions is as follows
 # 1. Run the script 
 # 2. Load the DICOM images from the folder containing the DICOM files
 # 3. Click on the "Isocontour detection" button to detect the ROIs for the predefined centers
 # 4. Repeat step 2 and 3 for different reconstructions
 # 5. When all the reconstructed images are loaded, click on the "Draw Plot" button to plot the recovery coefficients. Note: this will only save the plot, but not show it yet
 # 6. Click on the "Show Plot" button to display the plot
+# Plot the absolute errors of the different SUV modes as follows:
+# 1. Run the script 
+# 2. Load the DICOM images from the folder containing the DICOM files
+# 3. Click on the "Calculate SUV_N" button to calculate the SUV_N values for the predefined centers
+# 4. Close the 2 figures for the code to continue (1: the figure of the selected slice, 2: the delta SUV vs Mode of SUV plot)
+# 5. Click on "Yes" when it asks you if you want to load more data. It will show you for the first iteration the summed absolute delta SUV vs Mode of SUV plot
+# 6. Do not close this plot but just repeat now step 2-5 (the first figure of step 4 will not appear again, just close the second figure of step 4)
+
+
 import concurrent.futures
 import pydicom
 import os
@@ -26,6 +36,7 @@ roi_pixels = None
 roi_masks = []
 # Global variables to maintain state across multiple DICOM folder additions
 iteration_count = 0
+legend_entries = []
 # Initialize an array to store the recovery coefficients
 SUV_max_values = []
 recovery_coefficients = []
@@ -68,16 +79,18 @@ def display_dicom_image(dicom_image, canvas, ax, rois=None, roi_pixels=None):
 
 
     # Display ROIs from isocontour detection
-    roi_color = [0, 1, 1]  # Cyan color for VOI
+    roi_color = np.array([0, 1, 1])  # Cyan color for VOI
     if roi_masks:
+        alpha = 0.5  # Transparency level for the ROI masks
         for mask in roi_masks:
             if mask.shape == (512, 512):
-                rgb_image[mask] = roi_color
+                # Blend the ROI color with the existing color
+                rgb_image[mask] = (1 - alpha) * rgb_image[mask] + alpha * roi_color
             elif mask.shape == (127, 512, 512):
                 # Extract the relevant slice from the 3D mask
                 slice_index = current_index  # Assuming current_index is the relevant slice index
                 if 0 <= slice_index < mask.shape[0]:
-                    rgb_image[mask[slice_index]] = roi_color
+                    rgb_image[mask[slice_index]] = (1 - alpha) * rgb_image[mask[slice_index]] + alpha * roi_color
                 else:
                     print(f"Slice index {slice_index} is out of bounds for mask with shape {mask.shape}")
             else:
@@ -428,7 +441,6 @@ def calculate_SUV_N():
     roi_masks_array = np.array(roi_masks)
     print(f"Shape of roi_masks_array: {roi_masks_array.shape}")
     while True:    
-        
         # Extract the relevant slice from the image stack
         #current_slice = image_stack[current_index]
         # Extract the top N pixel values where roi_masks is True
@@ -489,7 +501,7 @@ def calculate_SUV_N():
         
 
 def plot_SUV_N(sphere_sizes, results):#, suv_peak_values):
-    global SUV_max_values, loaded_folder_path
+    global SUV_max_values, loaded_folder_path, iteration_count
 
     # Takes the first 6 values (i.e. the SUV_peak of the 6 spheres)
     #suv_peak_values = [details['max_mean'] for details in suv_peak_values.values()][:6] 
@@ -560,7 +572,12 @@ def plot_SUV_N(sphere_sizes, results):#, suv_peak_values):
     #plt.show()
     # Ask user to load more data or not
     answer = messagebox.askyesno("Load More Data", "Do you want to load more data?")
-    if not answer:        
+    if answer:
+        # Increment the iteration counter for the legend of the plot
+        iteration_count += 1
+        # Add the current iteration count to the legend entries
+        legend_entries.append(f'{iteration_count} iterations')
+
         # Plot the abs_sum values against the x_labels
         plt.figure('Summed Absolute Error Plot')
         plt.plot(range(num_values), abs_sums, marker='o')
@@ -568,7 +585,13 @@ def plot_SUV_N(sphere_sizes, results):#, suv_peak_values):
         plt.ylabel(r'Summed Absolute $\Delta$SUV [%]')
         plt.title('SUV Mode Dependent Error')
         plt.xticks(range(num_values), x_labels)  # Set x-ticks to the defined labels
+        plt.ylim(90, 140)
         plt.grid(True)
+
+        # Add legend with the iteration counter in the title and entries
+        plt.legend(legend_entries, title=f'Number of iterations: ')
+
+
         png_path = os.path.join(parent_directory, 'SUV_mode_dependent_error.png')
         pickle_path = os.path.join(parent_directory, 'SUV_mode_dependent_error.pickle')
         plt.savefig(png_path)
@@ -823,10 +846,10 @@ def process_rois_for_predefined_centers(roi_or_voi = 'roi'):
     # centers = [(200, 165), (189, 190), (160, 194), (144, 171), (154, 146), (183, 142)] 
     if roi_or_voi == 'roi':
         # Centers of 6 2D spheres with a 512x512 image size, increasing sphere sizes
-        centers = [(212, 272), (218, 229), (257, 214), (287, 242), (280, 282), (242, 298)]
+        centers = [(212, 272), (218, 230), (257, 214), (289, 240), (283, 281), (244, 298)]
     else:
         # Centers of 6 3D spheres with a 512x512 image size, increasing sphere sizes
-        centers = [(current_index, 212, 272), (current_index, 218, 229), (current_index, 257, 214), (current_index, 287, 242), (current_index, 280, 282), (current_index, 242, 298)]
+        centers = [(current_index, 212, 272), (current_index, 218, 230), (current_index, 257, 214), (current_index, 289, 240), (current_index, 283, 281), (current_index, 245, 298)]
     radius = 15  # Covers even the biggest sphere with a diameter of 18.5 pixels (times approx. 2 mm pixel_spacing = 37 mm sphere)
     roi_masks = []
     # roi_pixels = []  # Initialize roi_pixels as an empty list
