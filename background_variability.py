@@ -51,8 +51,13 @@ def load_dicom_images(directory):
     dicom_images = []
     for filename in os.listdir(directory):
         filepath = os.path.join(directory, filename)
-        dicom_image = pydicom.dcmread(filepath)
-        dicom_images.append(dicom_image)
+        try:
+            dicom_image = pydicom.dcmread(filepath)
+            dicom_images.append(dicom_image)
+        except FileNotFoundError:
+            print(f"File not found: {filepath}")
+        except Exception as e:
+            print(f"Error reading {filepath}: {e}")
 
     #print(f"Pixel array of dicom images in load_dicom_images: {dicom_images[0].pixel_array}")
     #print(f"Five maximal values of the 62nd DICOM image: {np.sort(dicom_images[61].pixel_array.flatten())[-5:]}")
@@ -130,7 +135,7 @@ def display_dicom_image(dicom_image, canvas, ax, rois=None, roi_pixels=None):
     # If circular ROIs are provided, set their pixels to different colors
     if rois:
         for i, roi_set in enumerate(rois):
-            for j, roi in enumerate(roi_set):
+            for j, roi in enumerate(reversed(roi_set)): # Reverse the order to start with the largest ROI, so the colour of the larger roi don't cover the smaller ones (otherwise the small rois won't appear in the image)
                 if roi is not None:
                     x_center, y_center, radius = roi['x'], roi['y'], roi['radius']
                     color = colors[j % len(colors)]  # Cycle through the colors
@@ -138,7 +143,7 @@ def display_dicom_image(dicom_image, canvas, ax, rois=None, roi_pixels=None):
                         for y in range(int(y_center - radius), int(y_center + radius)):
                             if (x - x_center) ** 2 + (y - y_center) ** 2 <= radius ** 2:
                                 if 0 <= x < img_array.shape[0] and 0 <= y < img_array.shape[1]:
-                                    rgb_image[x, y] = color  # Set the color for the ROI
+                                    rgb_image[y, x] = color  # Set the color for the ROI
 
 
     # Display the RGB image
@@ -169,12 +174,12 @@ def draw_rois():
             y = int(roi_entries[i]['y'].get())
 
             # Divide the radius by the pixel spacing to convert from mm to pixels
-            rois[i][0] = {'x': x, 'y': y, 'radius': round(37/2/pixel_spacing[0])}  # Circular 37 mm diameter ROI
-            rois[i][1] = {'x': x, 'y': y, 'radius': round(28/2/pixel_spacing[0])}  # Inner ROIs with decreasing diameters
-            rois[i][2] = {'x': x, 'y': y, 'radius': round(22/2/pixel_spacing[0])}
-            rois[i][3] = {'x': x, 'y': y, 'radius': round(17/2/pixel_spacing[0])}
-            rois[i][4] = {'x': x, 'y': y, 'radius': round(13/2/pixel_spacing[0])}
-            rois[i][5] = {'x': x, 'y': y, 'radius': round(10/2/pixel_spacing[0])}
+            rois[i][0] = {'x': x, 'y': y, 'radius': 10/2/pixel_spacing[0]}  # Circular 10 mm diameter ROI
+            rois[i][1] = {'x': x, 'y': y, 'radius': 13/2/pixel_spacing[0]}  # Inner ROIs with increasing diameters
+            rois[i][2] = {'x': x, 'y': y, 'radius': 17/2/pixel_spacing[0]}
+            rois[i][3] = {'x': x, 'y': y, 'radius': 22/2/pixel_spacing[0]}
+            rois[i][4] = {'x': x, 'y': y, 'radius': 28/2/pixel_spacing[0]}
+            rois[i][5] = {'x': x, 'y': y, 'radius': 37/2/pixel_spacing[0]}
 
         except ValueError:
             continue  # If invalid input, skip this ROI
@@ -202,6 +207,7 @@ def previous_slice():
 def background_variability(current_index):
     global roi_pixels, rois, dicom_images
 
+    sphere_sizes = [10, 13, 17, 22, 28, 37]  # Sphere sizes in mm
     # Extract slice_thickness using the DICOM tag's hexadecimal code
     slice_thickness = dicom_images[0][0x0018, 0x0050].value
     print(f"slice_thickness: {slice_thickness}")
@@ -274,16 +280,28 @@ def background_variability(current_index):
                 else:
                     column_mean_values[col].append(None)
 
-
-            
-    
+    image_stack = build_image_stack()
+    shape = image_stack.shape
+    roi_masks = [[[] for _ in range(6)] for _ in range(60)] # Initialize a 60x6 matrix to store the ROI masks
     # Print the 60x6 matrix with the average pixel values
     for row_idx, row in enumerate(mean_values):
         for col_idx, col in enumerate(row):
             if col:
-                print(f"Row {row_idx}, Column {col_idx}: {np.mean(col):.2f}")
+                # Extract the center and radius_pixels from rois
+                roi = rois[row_idx % 12][col_idx]
+                if roi is not None:
+                    center = (roi['y'], roi['x'])  # Note: center is (y, x)
+                    radius_pixels = roi['radius']
+                    mask = create_2d_spherical_mask(center, radius_pixels, shape)
+                    print(f"Sum of pixels in mask in background_variablity(): {np.sum(mask)}")
+                    roi_masks[row_idx][col_idx] = mask
+                print(f"ROI {row_idx}, Sphere Size {sphere_sizes[col_idx]} mm, Mean Value Within ROI: {np.mean(col):.2f}")
             else:
-                print(f"Row {row_idx}, Column {col_idx}: None")
+                print(f"ROI {row_idx}, Sphere Size {sphere_sizes[col_idx]} mm: No mean value")
+
+
+    
+    ir_values = get_ir_value(roi_masks, slice_numbers)
 
     # Calculate the final average for each column over the 5 slices
     final_mean_values = []
@@ -296,7 +314,7 @@ def background_variability(current_index):
             final_mean_values.append(None)
             #final_mean_values.append(None)
 
-    roi_sizes = [37, 28, 22, 17, 13, 10]
+    roi_sizes = [10, 13, 17, 22, 28, 37]  # Sphere sizes in mm
     # Print the average values with the corresponding ROI sizes
     for size, mean_value in zip(roi_sizes, final_mean_values):
         if mean_value is not None:
@@ -341,13 +359,135 @@ def background_variability(current_index):
 
     return background_variability_array
 
+
+def get_ir_value(masks, slice_numbers):
+    """
+    Calculate the image roughness in the background for all recons
+    Followed fromula (3) of http://dx.doi.org/10.1088/0031-9155/55/5/013
+    Takes the mean value of the sphere instead of SUV_N=40.
+    image_stack: 3D image stack.
+    mask: 3D boolean mask.
+    sphere_index: Index of the sphere to access the correct SUV_N values.
+    """
+    global current_index, rois
+    image_stack = build_image_stack()
+															   
+    # Convert masks to a NumPy array
+    masks_array = np.array(masks)
+    print(f"Shape of masks in get_ir_value: {masks_array.shape}")
+												  
+																					
+												   
+    '''
+    # Earlier calculated SUV_N values for N = 40 for the different sphere sizes at recon NEMA_IQ_01/_02/_03/_......
+    # Do not delete or change these values. If you want to update the values, comment the old values out.
+    SUV_N = [
+        # These are the SUV_N values for my NEMA IQ scan with background activity (ratio 1:4) from the 05.11.2024
+        # Used a spherical VOI of the true size of the spheres, no isocontour detection becuase it was delineating pixels that were not part of the spheres
+        [11217.52, 18049.38, 24637.45, 27948.10, 29819.10, 32157.55], #NEMA_IQ_01
+        [13341.70, 23084.22, 29678.75, 30543.72, 31378.25, 31764.33], #NEMA_IQ_02
+        [15063.55, 25432.20, 31010.53, 30502.62, 31531.20, 31496.33], #NEMA_IQ_03
+        [16082.25, 26268.30, 30999.67, 30034.17, 31217.08, 31088.40], #NEMA_IQ_04
+        [16950.70, 26895.42, 31082.22, 30094.42, 31345.62, 31257.05], #NEMA_IQ_05
+        [17579.17, 27225.28, 31013.72, 30144.60, 31482.20, 31500.88], #NEMA_IQ_06
+        [17914.97, 27191.67, 30674.42, 29999.25, 31397.58, 31506.95], #NEMA_IQ_07
+        [17977.90, 26831.17, 30076.20, 29603.53, 31029.97, 31203.60]  #NEMA_IQ_08
+    ]
+    
+    These are the SUV_N values for N = 15 and my first NEMA IQ scan without background activity from the 10.10.2024
+    SUV_N = [
+        [24112.53, 27057.20, 28927.80, 31733.00, 31394.60, 31100.07], #SUV_N_01
+        [23197.80, 26127.93, 28382.27, 31224.20, 31661.93, 31961.00], #SUV_N_02
+        [22330.27, 25897.73, 27985.33, 30909.07, 31821.67, 32160.80], #SUV_N_03
+        [21833.73, 25974.00, 27838.13, 30907.33, 31895.27, 32314.60], #SUV_N_04
+        [21341.13, 25854.53, 27627.93, 30744.87, 31737.33, 32199.73], #SUV_N_05
+        [20835.33, 25594.93, 27327.27, 30440.73, 31461.13, 31928.67], #SUV_N_06
+        [20438.00, 25366.53, 27110.00, 30185.53, 31237.40, 31706.07], #SUV_N_07
+        [20131.80, 25170.27, 26933.20, 26933.20, 29963.80, 31056.60] #SUV_N_08
+    ]
+    '''
+    sphere_sizes = [10, 13, 17, 22, 28, 37]  # Sphere sizes in mm
+    ir_values = [[[] for _ in range(6)] for _ in range(60)]
+    # Iterate through each mask (each corresponding to a different sphere size)
+    for row_idx, row in enumerate(masks):
+        z_coords = slice_numbers[row_idx // 12]  # Use the floor division operator of 12 to assign the z_coord
+        for col_idx, mask in enumerate(row):
+            if mask is not None:
+                # Extract pixel values from the image stack where mask is True
+                # Create a 3D mask with the z_coords dimension
+                mask_3d = np.zeros_like(image_stack, dtype=bool)
+                #y_coords, x_coords = np.where(mask)
+                mask_3d[z_coords, :, :] = mask
+                pixel_values = image_stack[mask_3d]
+
+                print(f"Mask size in pixels: {np.sum(mask_3d)}")
+                mean_value = get_mean_value(image_stack, mask_3d)  # SUV_N value for this sphere in this recon
+                temp_value = np.sum((pixel_values - mean_value) ** 2)
+                ir = (np.sqrt(temp_value / (np.sum(mask_3d) - 1)) / mean_value)*100
+                ir_values[row_idx][col_idx] = ir
+                
+                print(f"IR values for ROI {row_idx + 1} and sphere size {sphere_sizes[col_idx]} mm: {ir:.2f}")
+
+    # Convert ir_values to a NumPy array for easier manipulation
+    ir_values_array = np.array(ir_values, dtype=np.float64)
+    
+    # Calculate the mean values for each column (sphere size)
+    mean_ir_values = np.nanmean(ir_values_array, axis=0)
+
+    plot_ir_values(mean_ir_values)
+
+    return ir_values
+
+
+def plot_ir_values(ir_values):
+    global iteration_count
+    sphere_sizes = [10, 13, 17, 22, 28, 37]
+    plt.figure(f'Image Roughness vs Sphere Size')
+    plt.plot(sphere_sizes, ir_values, marker='o')
+    plt.xlabel('Sphere Sizes [mm]')
+    plt.ylabel('Image Roughness [%]')
+    plt.title('Image Roughness vs Sphere Size')
+    plt.legend([f'Iteration: {iteration_count}'])
+    plt.grid(True)
+    plt.xticks(sphere_sizes)
+    plt.ylim(0, 10)
+    #plt.legend(recon_names, title=f'Number of iterations: ')
+    plt.draw()
+
+    # Show the plot to the user
+    plt.show(block=False)
+
+    save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Image Roughness"
+    answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here: {save_path}?")
+    if answer: 
+        # Save the plot as PNG, PDF, and pickle files
+        png_path = os.path.join(save_path, 'NEMA_IQ_01_image_roughness_in_background_vs_sphere_size.png')
+        pdf_path = os.path.join(save_path, 'NEMA_IQ_01_image_roughness_in_background_vs_sphere_size.pdf')
+        pickle_path = os.path.join(save_path, 'NEMA_IQ_01_image_roughness_in_background_vs_sphere_size.pickle')
+        
+        plt.savefig(png_path)
+        plt.savefig(pdf_path)
+        with open(pickle_path, 'wb') as f:
+            pickle.dump(plt.gcf(), f)
+    # Ask user to load more data or not
+    answer = messagebox.askyesno("Load More Data", "Do you want to load more data?")
+    if answer:
+        # Increment the iteration counter for the legend of the plot
+        iteration_count += 1
+        # Add the current iteration count to the legend entries
+        legend_entries.append(f'{iteration_count} iterations')
+    # Show the plot again to ensure it remains visible
+    plt.show() 
+    
+
+
 # Function to handle "Select" button click (saves the current slice)
 def select_slice():
     selected_slice = dicom_images[current_index]
     save_selected_slice(selected_slice)
     background_variability(current_index)
-    process_rois_for_predefined_centers()
-    suv_peak_with_spherical_voi()
+    #process_rois_for_predefined_centers()
+    #suv_peak_with_spherical_voi()
 
 # Function to save the selected DICOM slice
 def save_selected_slice(dicom_image):
@@ -419,15 +559,15 @@ def get_mean_value(image_stack, mask):
     z_coords, y_coords, x_coords = np.where(mask)
     
     # Adjust the z coordinates by adding current_index
-    adjusted_z_coords = z_coords + current_index
+    #adjusted_z_coords = z_coords + current_index
     
     # Ensure the adjusted z coordinates are within bounds
-    adjusted_z_coords = np.clip(adjusted_z_coords, 0, image_stack.shape[0] - 1)
+    #adjusted_z_coords = np.clip(adjusted_z_coords, 0, image_stack.shape[0] - 1)
     
     # Extract the pixel values using the adjusted z, y, and x coordinates
-    pixel_values = image_stack[adjusted_z_coords, y_coords, x_coords]
+    pixel_values = image_stack[z_coords, y_coords, x_coords]
     
-    print(f"This is the slice of the mean calculation: {adjusted_z_coords} and this is the mean value of the slice: {np.mean(pixel_values)}")
+																																			 
     # Calculate and return the mean value of the pixel values
     return np.mean(pixel_values)
 
@@ -731,19 +871,20 @@ def plot_suv_peak_against_sphere_size(suv_peak_values, sphere_sizes):
         print(f"SUV_peak: Max mean value: {max_mean_value} at position {max_position}")
         return max_mean_value, max_position    
 
-def can_place_sphere(center, radius_pixels, roi_masks_array):
+
+def can_place_sphere(center, radius_pixels):
     """
     Check if a sphere with given radius can be placed within the 2D ROI.
     center: (x_center, y_center) - Center of the sphere in the 2D image.
     radius_pixels: Radius of the sphere in pixels.
     roi_mask: 2D boolean array where True values indicate the ROI.
     """
-    #global roi_masks
+    global roi_masks
 
     z_center, y_center, x_center = center
     
     # Convert roi_masks to a NumPy array
-    #roi_masks_array = np.array(roi_masks)
+    roi_masks_array = np.array(roi_masks)
     depth, height, width = roi_masks_array.shape
     if False:
         # Check if all points within the sphere's radius are within the ROI and image boundaries
@@ -770,7 +911,13 @@ def create_2d_spherical_mask(center, radius_pixels, shape):
     shape: Shape of the 3D image stack.
     """
     global current_index
-    z_center, y_center, x_center = center
+    if len(center) == 2:
+        y_center, x_center = center
+    elif len(center) == 3:
+        z_center, y_center, x_center = center
+    else:
+        raise ValueError("Center should be a 2D or 3D coordinate")
+    
     #z_center += current_index  # Add current_index to z_center
     depth, height, width = shape
     print(f"Shape of the spherical mask: {shape}")
@@ -870,10 +1017,10 @@ def process_rois_for_predefined_centers(roi_or_voi = 'roi'):
     # centers = [(200, 165), (189, 190), (160, 194), (144, 171), (154, 146), (183, 142)] 
     if roi_or_voi == 'roi':
         # Centers of 6 2D spheres with a 512x512 image size, increasing sphere sizes
-        centers = [(current_index, 212, 272), (current_index, 218, 230), (current_index, 257, 214), (current_index, 289, 240), (current_index, 283, 281), (current_index, 245, 298)]
+        centers = [(current_index, 212, 272), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 283, 281), (current_index, 245, 298)]
     else:
         # Centers of 6 3D spheres with a 512x512 image size, increasing sphere sizes
-        centers = [(current_index, 212, 272), (current_index, 218, 230), (current_index, 257, 214), (current_index, 289, 240), (current_index, 283, 281), (current_index, 245, 298)]
+        centers = [(current_index, 212, 272), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 283, 281), (current_index, 245, 298)]
     radius = 15  # Covers even the biggest sphere with a diameter of 18.5 pixels (times approx. 2 mm pixel_spacing = 37 mm sphere)
     roi_masks = []
     # roi_pixels = []  # Initialize roi_pixels as an empty list
@@ -1128,11 +1275,11 @@ def create_gui():
     # Initialize the list to store the ROI entries
     roi_entries = []
 
-    # Define default values for the ROI coordinates
+    # Default values for 512x512 image size
     default_values = [
-        {'x': 145, 'y': 137}, {'x': 161, 'y': 127}, {'x': 179, 'y': 127}, {'x': 197, 'y': 129},
-        {'x': 205, 'y': 145}, {'x': 207, 'y': 176}, {'x': 205, 'y': 204}, {'x': 194, 'y': 219},
-        {'x': 177, 'y': 222}, {'x': 141, 'y': 202}, {'x': 160, 'y': 222}, {'x': 132, 'y': 169}
+        {'x': 258, 'y': 191}, {'x': 285, 'y': 194}, {'x': 308, 'y': 210}, {'x': 338, 'y': 255},
+        {'x': 336, 'y': 285}, {'x': 315, 'y': 302}, {'x': 265, 'y': 313}, {'x': 205, 'y': 308},
+        {'x': 195, 'y': 228}, {'x': 187, 'y': 282}, {'x': 178, 'y': 255}, {'x': 209, 'y': 205}
     ]
 
     
