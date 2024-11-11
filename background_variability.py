@@ -13,7 +13,14 @@
 # 4. Close the 2 figures for the code to continue (1: the figure of the selected slice, 2: the delta SUV vs Mode of SUV plot)
 # 5. Click on "Yes" when it asks you if you want to load more data. It will show you for the first iteration the summed absolute delta SUV vs Mode of SUV plot
 # 6. Do not close this plot but just repeat now step 2-5 (the first figure of step 4 will not appear again, just close the second figure of step 4)
-
+# Get Image Roughness in the background as follows:
+# 1. Run the script
+# 2. Load the DICOM images from the folder containing the DICOM files
+# 3. Click on the "Select Slice" button to select the slice for which you want to calculate the image roughness
+# 4. It will ask you if you want to save the image, you can either click yes or no
+# 5. The image roughness will be calculated and displayed in a plot
+# 6. It will ask you if you want to save the plot, you can either click yes or no
+# 7. To calculate the image roughness for another recon, repeat step 2-6. It will automatically add the image roughness of the new recon to the same plot
 
 import concurrent.futures
 import pydicom
@@ -441,13 +448,21 @@ def get_ir_value(masks, slice_numbers):
 
 def plot_ir_values(ir_values):
     global iteration_count
+
+    # Increment the iteration counter for the legend of the plot
+    iteration_count += 1
+    # Add the current iteration count to the legend entries
+    if iteration_count == 1:
+        legend_entries.append(f'{iteration_count} iteration')
+    else:
+        legend_entries.append(f'{iteration_count} iterations')
     sphere_sizes = [10, 13, 17, 22, 28, 37]
     plt.figure(f'Image Roughness vs Sphere Size')
     plt.plot(sphere_sizes, ir_values, marker='o')
     plt.xlabel('Sphere Sizes [mm]')
     plt.ylabel('Image Roughness [%]')
     plt.title('Image Roughness vs Sphere Size')
-    plt.legend([f'Iteration: {iteration_count}'])
+    plt.legend(legend_entries, title=f'Number of iterations: ')
     plt.grid(True)
     plt.xticks(sphere_sizes)
     plt.ylim(0, 10)
@@ -470,12 +485,9 @@ def plot_ir_values(ir_values):
         with open(pickle_path, 'wb') as f:
             pickle.dump(plt.gcf(), f)
     # Ask user to load more data or not
-    answer = messagebox.askyesno("Load More Data", "Do you want to load more data?")
-    if answer:
-        # Increment the iteration counter for the legend of the plot
-        iteration_count += 1
-        # Add the current iteration count to the legend entries
-        legend_entries.append(f'{iteration_count} iterations')
+    #answer = messagebox.askyesno("Load More Data", "Do you want to load more data?")
+    #if answer:
+    #    load_folder()
     # Show the plot again to ensure it remains visible
     plt.show() 
     
