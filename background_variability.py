@@ -491,6 +491,73 @@ def plot_ir_values(ir_values):
     # Show the plot again to ensure it remains visible
     plt.show() 
     
+def plot_snr_values():
+    # SNR calculation adapted from Tong et al. 2010 https://doi.org/10.1109/NSSMIC.2009.5401574 but with SUV_N=40 instead of SUV_mean
+    global iteration_count
+
+    
+    sphere_sizes = [10, 13, 17, 22, 28, 37]
+    
+    # Earlier calculated SUV_N values for N = 40 for the different sphere sizes at recon NEMA_IQ_01/_02/_03/_......
+    # Do not delete or change these values. If you want to update the values, comment the old values out.
+    SUV_N = [
+        # These are the SUV_N values for my NEMA IQ scan with background activity (ratio 1:4) from the 05.11.2024
+        # Used a spherical VOI of the true size of the spheres, no isocontour detection becuase it was delineating pixels that were not part of the spheres
+        [11217.52, 18049.38, 24637.45, 27948.10, 29819.10, 32157.55], #NEMA_IQ_01
+        [13341.70, 23084.22, 29678.75, 30543.72, 31378.25, 31764.33], #NEMA_IQ_02
+        [15063.55, 25432.20, 31010.53, 30502.62, 31531.20, 31496.33], #NEMA_IQ_03
+        [16082.25, 26268.30, 30999.67, 30034.17, 31217.08, 31088.40], #NEMA_IQ_04
+        [16950.70, 26895.42, 31082.22, 30094.42, 31345.62, 31257.05], #NEMA_IQ_05
+        [17579.17, 27225.28, 31013.72, 30144.60, 31482.20, 31500.88], #NEMA_IQ_06
+        [17914.97, 27191.67, 30674.42, 29999.25, 31397.58, 31506.95], #NEMA_IQ_07
+        [17977.90, 26831.17, 30076.20, 29603.53, 31029.97, 31203.60]  #NEMA_IQ_08
+    ]
+    true_activity_concentration = 26166.28 #Calculated the theoretical activity at scan start [kBq/mL] (Daniel, 05. Nov. 2024 11:36 am)
+
+    # Calculate the SNR for each sphere size
+    SUV_N_array = np.array(SUV_N)
+    # Noise to Signal ratio
+    nsr = np.sqrt((SUV_N_array - true_activity_concentration)**2) / true_activity_concentration
+    # Signal to Noise ratio, normalized to the true activity concentration
+    snr = 1 - nsr
+    print(f"SNR values: {snr}")
+    legend_entries = ['1 iteration', '2 iterations', '3 iterations', '4 iterations', '5 iterations', '6 iterations', '7 iterations', '8 iterations']
+    plt.figure('Signal-to-Noise Ratio vs Sphere Size')
+    for i, snr_row in enumerate(snr):
+        plt.plot(sphere_sizes, snr_row, marker='o', zorder=3) #, label=f'{i + 1} iteration{"s" if i > 0 else ""}')
+        #legend_entries.append(f'{i + 1} iteration{"s" if i > 0 else ""}')
+    plt.xlabel('Sphere Sizes [mm]')
+    plt.ylabel('SNR [1]')
+    plt.title('Signal-to-Noise Ratio vs Sphere Size')
+    plt.legend(legend_entries, title=f'Number of iterations: ')
+    plt.grid(True)
+    plt.xticks(sphere_sizes)
+    plt.ylim(0.4, 1)
+    #plt.legend(recon_names, title=f'Number of iterations: ')
+    plt.draw()
+
+    # Show the plot to the user
+    plt.show(block=False)
+
+    save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//SNR"
+    answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here: {save_path}?")
+    if answer: 
+        # Save the plot as PNG, PDF, and pickle files
+        png_path = os.path.join(save_path, 'NEMA_IQ_01_SNR_vs_sphere_size_calculated_with_SUV_40.png')
+        pdf_path = os.path.join(save_path, 'NEMA_IQ_01_SNR_vs_sphere_size_calculated_with_SUV_40.pdf')
+        pickle_path = os.path.join(save_path, 'NEMA_IQ_01_SNR_vs_sphere_size_calculated_with_SUV_40.pickle')
+        
+        plt.savefig(png_path)
+        plt.savefig(pdf_path)
+        with open(pickle_path, 'wb') as f:
+            pickle.dump(plt.gcf(), f)
+    # Ask user to load more data or not
+    #answer = messagebox.askyesno("Load More Data", "Do you want to load more data?")
+    #if answer:
+    #    load_folder()
+    # Show the plot again to ensure it remains visible
+    plt.show() 
+
 
 
 # Function to handle "Select" button click (saves the current slice)
@@ -615,7 +682,7 @@ def calculate_SUV_N():
                 print(f"SUV_{N} for sphere size {sphere_size} mm: {mean_top_N:.2f} Bq/mL")
 
         # Update plot
-        load_more_data = plot_SUV_N(sphere_sizes, results, suv_peak_values)
+        load_more_data = plot_SUV_N(sphere_sizes, results) # , suv_peak_values)
         if not load_more_data:
             break
         # More data to plot
@@ -676,7 +743,7 @@ def plot_SUV_N(sphere_sizes, results, suv_peak_values):
     # take the true activtiy concentration as the average of the activity concentration at the start and end of the scan
     # reason: can't decay-correct as usual since it is a static image and not a dynamic one
     #true_activity_conc = ((activty_conc_at_scan_start - activity_conc_at_scan_end) / 2) + activity_conc_at_scan_end
-    true_activity_concentration = 26166.28 #Calculated the theoretical activity at scan start (Daniel, 05. Nov. 2024 11:36 am)
+    true_activity_concentration = 26166.28 #Calculated the theoretical activity at scan start [kBq/mL] (Daniel, 05. Nov. 2024 11:36 am)
         
     # measured activity concentration in Bq/mL / (injected activity in Bq / phantom weight in kg)    
     #for sphere_size in sphere_sizes:
@@ -1255,6 +1322,10 @@ def create_gui():
     # Show Plot Button
     show_plot_button = tk.Button(root, text="Show Plot", command=show_plot)
     show_plot_button.pack(side=tk.LEFT, padx=25, pady=10)
+
+    # Plot SNR Button
+    plot_snr_button = tk.Button(root, text="Plot SNR", command=plot_snr_values)
+    plot_snr_button.pack(side=tk.LEFT, padx=25, pady=10)
 
     # Label for displaying the maximum pixel value
     max_pixel_label = tk.Label(root, text="Max Pixel Value: N/A")

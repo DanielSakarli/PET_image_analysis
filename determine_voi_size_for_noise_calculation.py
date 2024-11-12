@@ -29,6 +29,7 @@ roi_pixels = None
 roi_masks = []
 # Global variables to maintain state across multiple DICOM folder additions
 iteration_count = 0
+legend_entries = []
 # Initialize an array to store the recovery coefficients
 SUV_max_values = []
 recovery_coefficients = []
@@ -427,8 +428,8 @@ def get_mean_value(image_stack, mask):
     return np.mean(pixel_values)
 
 def calculate_SUV_N():
-    process_rois_for_predefined_centers('roi') # initialize the 2D ROI mask
-    suv_peak_values = suv_peak_with_spherical_voi() # Get the SUV_peak with 2D ROI mask (3D is computationally too expensive)
+    #process_rois_for_predefined_centers('roi') # initialize the 2D ROI mask
+    #suv_peak_values = suv_peak_with_spherical_voi() # Get the SUV_peak with 2D ROI mask (3D is computationally too expensive)
     process_rois_for_predefined_centers('voi') # update the 2D ROI mask to be a 3D VOI mask for SUV_N calculation
     global dicom_images, current_index, roi_masks, iteration_count, loaded_folder_path
     sphere_sizes = [10, 13, 17, 22, 28, 37]  # Example sphere sizes
@@ -459,7 +460,7 @@ def calculate_SUV_N():
                 print(f"SUV_{N} for sphere size {sphere_size} mm: {mean_top_N:.2f} Bq/mL")
 
         # Update plot
-        load_more_data = plot_SUV_N(sphere_sizes, results, suv_peak_values)
+        load_more_data = plot_SUV_N(sphere_sizes, results) #, suv_peak_values)
         if not load_more_data:
             break
         # More data to plot
@@ -775,11 +776,25 @@ def get_ir_value(masks):
     mask: 3D boolean mask.
     sphere_index: Index of the sphere to access the correct SUV_N values.
     """
-    global current_index
+    global current_index, iteration_count
     image_stack = build_image_stack()
     
-    # Earlier calculated SUV_N values for N = 40 for the different sphere sizes at recon NEMA_IQ_01/_02/_03/_......
     # Do not delete or change these values. If you want to update the values, comment the old values out.
+    # SUV_N values for N = 40 for NEMA IQ scan with background activity from the 05.11.2024
+    SUV_N = [
+    
+            [13341.70, 23084.22, 29678.75, 30543.72, 31378.25, 31764.33], # NEMA_IQ_02
+            [12482.75, 21252.53, 28507.85, 31075.72, 31578.72, 32145.90], # NEMA_IQ_02_a
+            [11556.73, 18945.58, 26116.03, 30529.75, 31494.72, 32348.22], # NEMA_IQ_02_b
+            [15063.55, 25432.20, 31010.53, 30502.62, 31531.20, 31496.33], # NEMA_IQ_03
+            [13918.33, 23452.40, 30370.70, 31493.33, 31815.47, 32053.58], # NEMA_IQ_03_a
+            [12649.10, 20726.67, 27998.78, 31479.95, 31848.30, 32322.97], # NEMA_IQ_03_b
+            [16082.25, 26268.30, 30999.67, 30034.17, 31217.08, 31088.40], # NEMA_IQ_04
+            [14750.90, 24351.83, 30816.50, 31237.28, 31641.05, 31745.53], # NEMA_IQ_04_a
+            [13325.77, 21627.67, 28845.83, 31810.90, 32000.35, 32332.00]  # NEMA_IQ_04_b
+    ]
+    '''
+    # Earlier calculated SUV_N values for N = 40 for the different sphere sizes at recon NEMA_IQ_01/_02/_03/_......
     SUV_N = [
         # These are the SUV_N values for my NEMA IQ scan with background activity (ratio 1:4) from the 05.11.2024
         # Used a spherical VOI of the true size of the spheres, no isocontour detection becuase it was delineating pixels that were not part of the spheres
@@ -792,6 +807,7 @@ def get_ir_value(masks):
         [17914.97, 27191.67, 30674.42, 29999.25, 31397.58, 31506.95], #NEMA_IQ_07
         [17977.90, 26831.17, 30076.20, 29603.53, 31029.97, 31203.60]  #NEMA_IQ_08
     ]
+    '''
     '''
     These are the SUV_N values for N = 15 and my first NEMA IQ scan without background activity from the 10.10.2024
     SUV_N = [
@@ -815,15 +831,14 @@ def get_ir_value(masks):
         z_coords, y_coords, x_coords = np.where(mask)
         pixel_values = image_stack[z_coords, y_coords, x_coords]
 
-        # Calculate image roughness for each reconstruction
-        for recon_index, suv_values in enumerate(SUV_N):
-            suv_n_value = suv_values[mask_index]  # SUV_N value for this sphere in this recon
-            temp_value = np.sum((pixel_values - suv_n_value) ** 2)
-            ir = (np.sqrt(temp_value / (np.sum(mask) - 1)) / suv_n_value)*100
-            ir_values.append(ir)
+        # Calculate image roughness in this specific reconstruction (iteration_count)
+        #for suv_n_value in SUV_N[iteration_count]:
+        temp_value = np.sum((pixel_values - SUV_N[iteration_count][mask_index]) ** 2)
+        ir = (np.sqrt(temp_value / (np.sum(mask) - 1)) / SUV_N[iteration_count][mask_index])
+        ir_values.append(ir)
         
         ir_values_per_recon.append(ir_values)
-        print(f"IR values for sphere size {mask_index + 1} mm: {ir_values}")
+        print(f"IR values for sphere size {mask_index + 1}: {ir_values}")
     if False:
         # Loop through each mask and calculate IR values
         for mask_index, mask in enumerate(masks):
@@ -845,18 +860,33 @@ def get_ir_value(masks):
     print(f"IR values shape: {np.array(ir_values_per_recon).shape}")
     plot_ir_values(ir_values_per_recon)
 
-def plot_ir_values(ir_values_per_recon):
-    #global iteration_count
-    recon_names = ['1 iteration', '2 iterations', '3 iterations', '4 iterations', '5 iterations', '6 iterations', '7 iterations', '8 iterations']
+def plot_ir_values(ir_values):
+    global iteration_count
+    legend_entries = ['2 iterations, Gauss 3x3', '2 iterations, Gauss 5x5', '2 iterations, Gauss 7x7', '3 iterations, Gauss 3x3', '3 iterations, Gauss 5x5', '3 iterations, Gauss 7x7', '4 iterations, Gauss 3x3', '4 iterations, Gauss 5x5', '4 iterations, Gauss 7x7']
+    # Increment the iteration counter for the legend of the plot
+    iteration_count += 1
+    # Add the current iteration count to the legend entries
+    #if iteration_count == 1:
+    #    legend_entries.append(f'{iteration_count} iteration')
+    #else:
+    #    legend_entries.append(f'{iteration_count} iterations')
     sphere_sizes = [10, 13, 17, 22, 28, 37]
+    
+    # Define line styles
+    line_styles = ['-', '--', '-.', '-', '--', '-.', '-', '--', '-.']
+    # Define colors
+    colors = ['orange', 'orange', 'orange', 'green', 'green', 'green', 'red', 'red', 'red']
+    
     plt.figure(f'Image Roughness vs Sphere Size')
-    plt.plot(sphere_sizes, ir_values_per_recon, marker='o')
+    plt.plot(sphere_sizes, ir_values, marker='o', linestyle=line_styles[iteration_count - 1], color=colors[iteration_count - 1])
     plt.xlabel('Sphere Sizes [mm]')
-    plt.ylabel('Image Roughness')
-    plt.title('Image Roughness vs Sphere Size for Different Reconstructions')
+    plt.ylabel('Image Roughness [%]')
+    plt.title('Image Roughness vs Sphere Size')
+    plt.legend(legend_entries[0:iteration_count], title=f'Number of iterations: ')
+    plt.ylim(0.9995, 1.005)
     plt.grid(True)
     plt.xticks(sphere_sizes)
-    plt.legend(recon_names[iteration_count], title=f'Number of iterations: ')
+    #plt.legend(recon_names, title=f'Number of iterations: ')
     plt.draw()
 
     # Show the plot to the user
@@ -864,18 +894,17 @@ def plot_ir_values(ir_values_per_recon):
 
     save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Image Roughness"
     answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here: {save_path}?")
-    if answer:
-        
+    if answer: 
         # Save the plot as PNG, PDF, and pickle files
-        png_path = os.path.join(save_path, 'NEMA_IQ_01-08_image_roughness_vs_sphere_size.png')
-        pdf_path = os.path.join(save_path, 'NEMA_IQ_01-08_image_roughness_vs_sphere_size.pdf')
-        pickle_path = os.path.join(save_path, 'NEMA_IQ_01-08_image_roughness_vs_sphere_size.pickle')
+        png_path = os.path.join(save_path, 'NEMA_IQ_02_04-a-b_image_roughness_within_the_spheres_calculated_with_SUV_N_vs_sphere_size.png')
+        pdf_path = os.path.join(save_path, 'NEMA_IQ_02_04-a-b_image_roughness_within_the_spheres_calculated_with_SUV_N_vs_sphere_size.pdf')
+        pickle_path = os.path.join(save_path, 'NEMA_IQ_02_04-a-b_image_roughness_within_the_spheres_calculated_with_SUV_N_vs_sphere_size.pickle')
         
         plt.savefig(png_path)
         plt.savefig(pdf_path)
         with open(pickle_path, 'wb') as f:
             pickle.dump(plt.gcf(), f)
-    
+
     # Show the plot again to ensure it remains visible
     plt.show() 
     
