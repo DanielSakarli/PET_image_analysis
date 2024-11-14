@@ -557,7 +557,7 @@ def plot_snr_values():
     #    plt.plot(sphere_sizes, snr_row, marker='o', zorder=3) #, label=f'{i + 1} iteration{"s" if i > 0 else ""}')
         #legend_entries.append(f'{i + 1} iteration{"s" if i > 0 else ""}')
     plt.xlabel('Sphere Sizes [mm]')
-    plt.ylabel('SNR [1/1]')
+    plt.ylabel('SNR [1]')
     plt.title('Signal-to-Noise Ratio vs Sphere Size')
     plt.legend(legend_entries, title=f'Number of iterations: ')
     plt.grid(True)
