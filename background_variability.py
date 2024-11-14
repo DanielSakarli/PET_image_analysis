@@ -15,7 +15,7 @@
 # 6. Do not close this plot but just repeat now step 2-5 (the first figure of step 4 will not appear again, just close the second figure of step 4)
 # Get Image Roughness in the background as follows:
 # 1. Run the script
-# 2. Load the DICOM images from the folder containing the DICOM files
+# 2. Load the DICOM images from the folder containing the DICOM files and choose the slice with the biggest sphere sizes
 # 3. Click on the "Select Slice" button to select the slice for which you want to calculate the image roughness
 # 4. It will ask you if you want to save the image, you can either click yes or no
 # 5. The image roughness will be calculated and displayed in a plot
@@ -452,17 +452,23 @@ def plot_ir_values(ir_values):
     # Increment the iteration counter for the legend of the plot
     iteration_count += 1
     # Add the current iteration count to the legend entries
-    if iteration_count == 1:
-        legend_entries.append(f'{iteration_count} iteration')
-    else:
-        legend_entries.append(f'{iteration_count} iterations')
+    #if iteration_count == 1:
+    #    legend_entries.append(f'{iteration_count} iteration')
+    #else:
+    #    legend_entries.append(f'{iteration_count} iterations')
     sphere_sizes = [10, 13, 17, 22, 28, 37]
+    legend_entries = ['2 iterations, Gauss 3x3', '2 iterations, Gauss 5x5', '2 iterations, Gauss 7x7', '3 iterations, Gauss 3x3', '3 iterations, Gauss 5x5', '3 iterations, Gauss 7x7', '4 iterations, Gauss 3x3', '4 iterations, Gauss 5x5', '4 iterations, Gauss 7x7']
+    # Define line styles
+    line_styles = ['-', '--', '-.', '-', '--', '-.', '-', '--', '-.']
+    # Define colors
+    colors = ['orange', 'orange', 'orange', 'green', 'green', 'green', 'red', 'red', 'red']
+    
     plt.figure(f'Image Roughness vs Sphere Size')
-    plt.plot(sphere_sizes, ir_values, marker='o')
+    plt.plot(sphere_sizes, ir_values, marker='o', linestyle=line_styles[iteration_count - 1], color=colors[iteration_count - 1])
     plt.xlabel('Sphere Sizes [mm]')
     plt.ylabel('Image Roughness [%]')
     plt.title('Image Roughness vs Sphere Size')
-    plt.legend(legend_entries, title=f'Number of iterations: ')
+    plt.legend(legend_entries[0:iteration_count], title=f'Number of iterations: ')
     plt.grid(True)
     plt.xticks(sphere_sizes)
     plt.ylim(0, 10)
@@ -476,9 +482,9 @@ def plot_ir_values(ir_values):
     answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here: {save_path}?")
     if answer: 
         # Save the plot as PNG, PDF, and pickle files
-        png_path = os.path.join(save_path, 'NEMA_IQ_01_image_roughness_in_background_vs_sphere_size.png')
-        pdf_path = os.path.join(save_path, 'NEMA_IQ_01_image_roughness_in_background_vs_sphere_size.pdf')
-        pickle_path = os.path.join(save_path, 'NEMA_IQ_01_image_roughness_in_background_vs_sphere_size.pickle')
+        png_path = os.path.join(save_path, 'NEMA_IQ_02_04-a-b_image_roughness_in_background_vs_sphere_size.png')
+        pdf_path = os.path.join(save_path, 'NEMA_IQ_02_04-a-b_image_roughness_in_background_vs_sphere_size.pdf')
+        pickle_path = os.path.join(save_path, 'NEMA_IQ_02_04-a-b_image_roughness_in_background_vs_sphere_size.pickle')
         
         plt.savefig(png_path)
         plt.savefig(pdf_path)
@@ -497,9 +503,21 @@ def plot_snr_values():
 
     
     sphere_sizes = [10, 13, 17, 22, 28, 37]
-    
-    # Earlier calculated SUV_N values for N = 40 for the different sphere sizes at recon NEMA_IQ_01/_02/_03/_......
+    SUV_N = [
+    # Scan from the 05.11.2024 with a 1:4 background activity ratio
+            [13341.70, 23084.22, 29678.75, 30543.72, 31378.25, 31764.33], # NEMA_IQ_02
+            [12482.75, 21252.53, 28507.85, 31075.72, 31578.72, 32145.90], # NEMA_IQ_02_a
+            [11556.73, 18945.58, 26116.03, 30529.75, 31494.72, 32348.22], # NEMA_IQ_02_b
+            [15063.55, 25432.20, 31010.53, 30502.62, 31531.20, 31496.33], # NEMA_IQ_03
+            [13918.33, 23452.40, 30370.70, 31493.33, 31815.47, 32053.58], # NEMA_IQ_03_a
+            [12649.10, 20726.67, 27998.78, 31479.95, 31848.30, 32322.97], # NEMA_IQ_03_b
+            [16082.25, 26268.30, 30999.67, 30034.17, 31217.08, 31088.40], # NEMA_IQ_04
+            [14750.90, 24351.83, 30816.50, 31237.28, 31641.05, 31745.53], # NEMA_IQ_04_a
+            [13325.77, 21627.67, 28845.83, 31810.90, 32000.35, 32332.00]  # NEMA_IQ_04_b
+    ]
     # Do not delete or change these values. If you want to update the values, comment the old values out.
+    '''
+    # Earlier calculated SUV_N values for N = 40 for the different sphere sizes at recon NEMA_IQ_01/_02/_03/_......
     SUV_N = [
         # These are the SUV_N values for my NEMA IQ scan with background activity (ratio 1:4) from the 05.11.2024
         # Used a spherical VOI of the true size of the spheres, no isocontour detection becuase it was delineating pixels that were not part of the spheres
@@ -512,7 +530,8 @@ def plot_snr_values():
         [17914.97, 27191.67, 30674.42, 29999.25, 31397.58, 31506.95], #NEMA_IQ_07
         [17977.90, 26831.17, 30076.20, 29603.53, 31029.97, 31203.60]  #NEMA_IQ_08
     ]
-    true_activity_concentration = 26166.28 #Calculated the theoretical activity at scan start [kBq/mL] (Daniel, 05. Nov. 2024 11:36 am)
+    '''
+    true_activity_concentration = 26166.28 #Calculated the theoretical activity at scan start [Bq/mL] (Daniel, 05. Nov. 2024 11:36 am)
 
     # Calculate the SNR for each sphere size
     SUV_N_array = np.array(SUV_N)
@@ -521,13 +540,24 @@ def plot_snr_values():
     # Signal to Noise ratio, normalized to the true activity concentration
     snr = 1 - nsr
     print(f"SNR values: {snr}")
-    legend_entries = ['1 iteration', '2 iterations', '3 iterations', '4 iterations', '5 iterations', '6 iterations', '7 iterations', '8 iterations']
+    #legend_entries = ['1 iteration', '2 iterations', '3 iterations', '4 iterations', '5 iterations', '6 iterations', '7 iterations', '8 iterations']
+    legend_entries = ['2 iterations, Gauss 3x3', '2 iterations, Gauss 5x5', '2 iterations, Gauss 7x7', '3 iterations, Gauss 3x3', '3 iterations, Gauss 5x5', '3 iterations, Gauss 7x7', '4 iterations, Gauss 3x3', '4 iterations, Gauss 5x5', '4 iterations, Gauss 7x7']
+    # Define line styles
+    line_styles = ['-', '--', '-.', '-', '--', '-.', '-', '--', '-.']
+    # Define colors
+    colors = ['orange', 'orange', 'orange', 'green', 'green', 'green', 'red', 'red', 'red']
+    
+    # Plot the SNRs for each sphere size
     plt.figure('Signal-to-Noise Ratio vs Sphere Size')
     for i, snr_row in enumerate(snr):
-        plt.plot(sphere_sizes, snr_row, marker='o', zorder=3) #, label=f'{i + 1} iteration{"s" if i > 0 else ""}')
+        plt.plot(sphere_sizes, snr_row, marker='o', linestyle=line_styles[i], color=colors[i], label=legend_entries[i])
+    
+    #plt.figure('Signal-to-Noise Ratio vs Sphere Size')
+    #for i, snr_row in enumerate(snr):
+    #    plt.plot(sphere_sizes, snr_row, marker='o', zorder=3) #, label=f'{i + 1} iteration{"s" if i > 0 else ""}')
         #legend_entries.append(f'{i + 1} iteration{"s" if i > 0 else ""}')
     plt.xlabel('Sphere Sizes [mm]')
-    plt.ylabel('SNR [1]')
+    plt.ylabel('SNR [1/1]')
     plt.title('Signal-to-Noise Ratio vs Sphere Size')
     plt.legend(legend_entries, title=f'Number of iterations: ')
     plt.grid(True)
@@ -540,13 +570,12 @@ def plot_snr_values():
     plt.show(block=False)
 
     save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//SNR"
-    answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here: {save_path}?")
+    png_path = os.path.join(save_path, 'NEMA_IQ_02-04-a-b_SNR_vs_sphere_size_calculated_with_SUV_40.png')
+    pdf_path = os.path.join(save_path, 'NEMA_IQ_02-04-a-b_SNR_vs_sphere_size_calculated_with_SUV_40.pdf')
+    pickle_path = os.path.join(save_path, 'NEMA_IQ_02-04-a-b_SNR_vs_sphere_size_calculated_with_SUV_40.pickle')
+    answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here: {save_path} as: {png_path}?")
     if answer: 
-        # Save the plot as PNG, PDF, and pickle files
-        png_path = os.path.join(save_path, 'NEMA_IQ_01_SNR_vs_sphere_size_calculated_with_SUV_40.png')
-        pdf_path = os.path.join(save_path, 'NEMA_IQ_01_SNR_vs_sphere_size_calculated_with_SUV_40.pdf')
-        pickle_path = os.path.join(save_path, 'NEMA_IQ_01_SNR_vs_sphere_size_calculated_with_SUV_40.pickle')
-        
+        # Save the plot as PNG, PDF, and pickle files        
         plt.savefig(png_path)
         plt.savefig(pdf_path)
         with open(pickle_path, 'wb') as f:

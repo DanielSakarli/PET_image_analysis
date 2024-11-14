@@ -8,6 +8,14 @@
 # Updated plot of recovery coefficients:
 # 1. Run the script
 # 2. Click on "Draw Recovery Coefficients" (this will take the hard-coded SUV_N=40 values for RC calculation)
+# Get Image Roughness within the spheres as follows:
+# 1. Run the script
+# 2. Load the DICOM images from the folder containing the DICOM files and choose the slice with the biggest sphere sizes
+# 3. Click on the "Calculate Noise" button to calculate the image roughness
+# 4. Close the initial 2 plots that pop up. Then the code will conitnue
+# 5. The image roughness will be calculated and displayed in a plot
+# 6. It will ask you if you want to save the plot, you can either click yes or no
+# 7. To calculate the image roughness for another recon, repeat step 2-6. It will automatically add the image roughness of the new recon to the same plot
 
 import pydicom
 import os

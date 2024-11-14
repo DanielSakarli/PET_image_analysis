@@ -598,6 +598,7 @@ def suv_peak_with_spherical_voi():
     plot_suv_peak_against_sphere_size(suv_peak_values, sphere_sizes)
     return max_values_per_slice
 
+
 def plot_suv_peak_against_sphere_size(suv_peak_values, sphere_sizes):
     global current_index, loaded_folder_path
     plt.figure(figsize=(8, 6))  # Adjust plot size to make it more readable
@@ -847,11 +848,24 @@ def process_rois_for_predefined_centers(roi_or_voi = 'roi'):
     return roi_masks
 
 
-def draw_recovery_coefficients():
+def plot_recovery_coefficients():
     global iteration_count
     sphere_sizes = [10, 13, 17, 22, 28, 37]
+    # Do not delete or change these SUV_N values. If you want to update the values, comment the old values out.
+    SUV_N = [
+    # Scan from the 05.11.2024 with a 1:4 background activity ratio
+            [13341.70, 23084.22, 29678.75, 30543.72, 31378.25, 31764.33], # NEMA_IQ_02
+            [12482.75, 21252.53, 28507.85, 31075.72, 31578.72, 32145.90], # NEMA_IQ_02_a
+            [11556.73, 18945.58, 26116.03, 30529.75, 31494.72, 32348.22], # NEMA_IQ_02_b
+            [15063.55, 25432.20, 31010.53, 30502.62, 31531.20, 31496.33], # NEMA_IQ_03
+            [13918.33, 23452.40, 30370.70, 31493.33, 31815.47, 32053.58], # NEMA_IQ_03_a
+            [12649.10, 20726.67, 27998.78, 31479.95, 31848.30, 32322.97], # NEMA_IQ_03_b
+            [16082.25, 26268.30, 30999.67, 30034.17, 31217.08, 31088.40], # NEMA_IQ_04
+            [14750.90, 24351.83, 30816.50, 31237.28, 31641.05, 31745.53], # NEMA_IQ_04_a
+            [13325.77, 21627.67, 28845.83, 31810.90, 32000.35, 32332.00]  # NEMA_IQ_04_b
+    ]
+    '''
     # Earlier calculated SUV_N values for N = 15 for the different sphere sizes at recon Phantom-01/-02/-03/-......
-    # Do not delete or change these values. If you want to update the values, comment the old values out.
     SUV_N_01 = [24112.53, 27057.20, 28927.80, 31733.00, 31394.60, 31100.07]
     SUV_N_02 = [23197.80, 26127.93, 28382.27, 31224.20, 31661.93, 31961.00]
     SUV_N_03 = [22330.27, 25897.73, 27985.33, 30909.07, 31821.67, 32160.80]
@@ -860,61 +874,58 @@ def draw_recovery_coefficients():
     SUV_N_06 = [20835.33, 25594.93, 27327.27, 30440.73, 31461.13, 31928.67]
     SUV_N_07 = [20438.00, 25366.53, 27110.00, 30185.53, 31237.40, 31706.07]
     SUV_N_08 = [20131.80, 25170.27, 26933.20, 26933.20, 29963.80, 31056.60]
-    activity_conc_at_scan_start = 28136.08 # calculated the activity with the measured injected_activity and the decay constant of F-18 (in Bq)
+    '''
+    #true_activity_concentration = 28136.08 # calculated the activity for scan from the 10.10.2024 with the measured injected_activity and the decay constant of F-18 (in Bq)
+    true_activity_concentration = 26166.28 #Calculated the theoretical activity at scan start [Bq/mL] (Daniel, 05. Nov. 2024 11:36 am)
+
     # activity_conc_at_scan_end = 25593.21
     # take the true activtiy concentration as the average of the activity concentration at the start and end of the scan
     # reason: can't decay-correct as usual since it is a static image and not a dynamic one
     # true_activity_conc = ((activity_conc_at_scan_start - activity_conc_at_scan_end) / 2) + activity_conc_at_scan_end
     
-    
-    # Divide all the values of the 8 arrays by activity_conc_at_scan_start
-    SUV_N_01 = [100 * value / activity_conc_at_scan_start for value in SUV_N_01]
-    SUV_N_02 = [100 * value / activity_conc_at_scan_start for value in SUV_N_02]
-    SUV_N_03 = [100 * value / activity_conc_at_scan_start for value in SUV_N_03]
-    SUV_N_04 = [100 * value / activity_conc_at_scan_start for value in SUV_N_04]
-    SUV_N_05 = [100 * value / activity_conc_at_scan_start for value in SUV_N_05]
-    SUV_N_06 = [100 * value / activity_conc_at_scan_start for value in SUV_N_06]
-    SUV_N_07 = [100 * value / activity_conc_at_scan_start for value in SUV_N_07]
-    SUV_N_08 = [100 * value / activity_conc_at_scan_start for value in SUV_N_08]
-
+    SUV_N_array = np.array(SUV_N)
+    recovery_coefficients = 100 * SUV_N_array / true_activity_concentration
+    print(f"Shape of recovery_coeff: ", recovery_coefficients.shape)
+    legend_entries = ['2 iterations, Gauss 3x3', '2 iterations, Gauss 5x5', '2 iterations, Gauss 7x7', '3 iterations, Gauss 3x3', '3 iterations, Gauss 5x5', '3 iterations, Gauss 7x7', '4 iterations, Gauss 3x3', '4 iterations, Gauss 5x5', '4 iterations, Gauss 7x7']
+    # Define line styles
+    line_styles = ['-', '--', '-.', '-', '--', '-.', '-', '--', '-.']
+    # Define colors
+    colors = ['orange', 'orange', 'orange', 'green', 'green', 'green', 'red', 'red', 'red']
     # Plot each SUV array against the voi_sizes
     plt.figure('Recovery Coefficients')
-    plt.plot(sphere_sizes, SUV_N_01, marker='o', label='Recon 1')
-    plt.plot(sphere_sizes, SUV_N_02, marker='o', label='Recon 2')
-    plt.plot(sphere_sizes, SUV_N_03, marker='o', label='Recon 3')
-    plt.plot(sphere_sizes, SUV_N_04, marker='o', label='Recon 4')
-    plt.plot(sphere_sizes, SUV_N_05, marker='o', label='Recon 5')
-    plt.plot(sphere_sizes, SUV_N_06, marker='o', label='Recon 6')
-    plt.plot(sphere_sizes, SUV_N_07, marker='o', label='Recon 7')
-    plt.plot(sphere_sizes, SUV_N_08, marker='o', label='Recon 8')
-
+    # Plot the recovery coefficients
+    for i, rc in enumerate(recovery_coefficients):
+        plt.plot(sphere_sizes, rc, marker='o', linestyle=line_styles[i], color=colors[i], label=legend_entries[i])
+    
     # Add labels and legend
     plt.xlabel('Sphere Size [mm]')
     plt.ylabel('Recovery Coefficient [%]')
-    plt.title('Recovery Coefficients vs Sphere Size')
+    plt.title('Recovery Coefficients Calculated with $SUV_{40}$')
     plt.legend()
     plt.grid(True)
     plt.xticks(sphere_sizes)  # Set x-ticks to the exact sphere sizes
-    plt.ylim(70, 120)
-    plt.show()
-    if False:
-        # Get the parent directory of loaded_folder_path
-        parent_directory = os.path.dirname(loaded_folder_path)
+    plt.ylim(40, 130)
+    # Show the plot to the user
+    plt.show(block=False)
 
-        # Save the plot as PNG and pickle
-        png_path = os.path.join(parent_directory, f'Recovery_coefficients_vs_sphere_size.png')
-        pickle_path = os.path.join(parent_directory, f'Recovery_coefficients_vs_sphere_size.pickle')
-
+    save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Recovery Coefficients"
+    answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here: {save_path}?")
+    if answer: 
+        # Save the plot as PNG, PDF, and pickle files
+        png_path = os.path.join(save_path, 'NEMA_IQ_02_04-a-b_rc_with_SUV_40_vs_sphere_size.png')
+        pdf_path = os.path.join(save_path, 'NEMA_IQ_02_04-a-b_rc_with_SUV_40_vs_sphere_size.pdf')
+        pickle_path = os.path.join(save_path, 'NEMA_IQ_02_04-a-b_rc_with_SUV_40_vs_sphere_size.pickle')
+        
         plt.savefig(png_path)
+        plt.savefig(pdf_path)
         with open(pickle_path, 'wb') as f:
             pickle.dump(plt.gcf(), f)
-
-        plt.show()
-
-    #plt.show()  # Show the plot and block interaction until closed
-    #plt.close(fig)  # Ensure the figure is closed after displaying
-    
-    #plt.draw()  # Update the plot without blocking
+    # Ask user to load more data or not
+    #answer = messagebox.askyesno("Load More Data", "Do you want to load more data?")
+    #if answer:
+    #    load_folder()
+    # Show the plot again to ensure it remains visible
+    plt.show() 
 
 def show_plot():
     global loaded_folder_path
@@ -996,7 +1007,7 @@ def create_gui():
     process_voi_button.pack(side=tk.LEFT, padx=20, pady=10)
 
     # Draw RC Button
-    draw_recovery_coefficients_button = tk.Button(root, text="Draw Recovery Coefficients", command=draw_recovery_coefficients)
+    draw_recovery_coefficients_button = tk.Button(root, text="Draw Recovery Coefficients", command=plot_recovery_coefficients)
     draw_recovery_coefficients_button.pack(side=tk.LEFT, padx=25, pady=10)
 
     # Show Plot Button
