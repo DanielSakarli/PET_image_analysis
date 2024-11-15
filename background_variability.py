@@ -457,18 +457,21 @@ def plot_ir_values(ir_values):
     #else:
     #    legend_entries.append(f'{iteration_count} iterations')
     sphere_sizes = [10, 13, 17, 22, 28, 37]
-    legend_entries = ['2 iterations, Gauss 3x3', '2 iterations, Gauss 5x5', '2 iterations, Gauss 7x7', '3 iterations, Gauss 3x3', '3 iterations, Gauss 5x5', '3 iterations, Gauss 7x7', '4 iterations, Gauss 3x3', '4 iterations, Gauss 5x5', '4 iterations, Gauss 7x7']
+    #legend_entries = ['2 iterations, Gauss 3x3', '2 iterations, Gauss 5x5', '2 iterations, Gauss 7x7', '3 iterations, Gauss 3x3', '3 iterations, Gauss 5x5', '3 iterations, Gauss 7x7', '4 iterations, Gauss 3x3', '4 iterations, Gauss 5x5', '4 iterations, Gauss 7x7']
+    legend_entries = ['Absolute Scattering, 2i', 'Relative Scattering, 2i', 'Absolute Scattering, 3i', 'Relative Scattering, 3i', 'Absolute Scattering, 4i', 'Relative Scattering, 4i']
     # Define line styles
-    line_styles = ['-', '--', '-.', '-', '--', '-.', '-', '--', '-.']
+    #line_styles = ['-', '--', '-.', '-', '--', '-.', '-', '--', '-.']
+    line_styles = ['-', '--', '-', '--', '-', '--']
     # Define colors
-    colors = ['orange', 'orange', 'orange', 'green', 'green', 'green', 'red', 'red', 'red']
-    
+    #colors = ['orange', 'orange', 'orange', 'green', 'green', 'green', 'red', 'red', 'red']
+    colors = ['orange', 'orange', 'green', 'green', 'red', 'red']
+
     plt.figure(f'Image Roughness vs Sphere Size')
     plt.plot(sphere_sizes, ir_values, marker='o', linestyle=line_styles[iteration_count - 1], color=colors[iteration_count - 1])
     plt.xlabel('Sphere Sizes [mm]')
     plt.ylabel('Image Roughness [%]')
     plt.title('Image Roughness vs Sphere Size')
-    plt.legend(legend_entries[0:iteration_count], title=f'Number of iterations: ')
+    plt.legend(legend_entries[0:iteration_count]) #, title=f'Number of iterations: ')
     plt.grid(True)
     plt.xticks(sphere_sizes)
     plt.ylim(0, 10)
@@ -482,9 +485,9 @@ def plot_ir_values(ir_values):
     answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here: {save_path}?")
     if answer: 
         # Save the plot as PNG, PDF, and pickle files
-        png_path = os.path.join(save_path, 'NEMA_IQ_02_04-a-b_image_roughness_in_background_vs_sphere_size.png')
-        pdf_path = os.path.join(save_path, 'NEMA_IQ_02_04-a-b_image_roughness_in_background_vs_sphere_size.pdf')
-        pickle_path = os.path.join(save_path, 'NEMA_IQ_02_04-a-b_image_roughness_in_background_vs_sphere_size.pickle')
+        png_path = os.path.join(save_path, 'NEMA_IQ_02_04-c_image_roughness_in_background_vs_sphere_size.png')
+        pdf_path = os.path.join(save_path, 'NEMA_IQ_02_04-c_image_roughness_in_background_vs_sphere_size.pdf')
+        pickle_path = os.path.join(save_path, 'NEMA_IQ_02_04-c_image_roughness_in_background_vs_sphere_size.pickle')
         
         plt.savefig(png_path)
         plt.savefig(pdf_path)
@@ -503,6 +506,17 @@ def plot_snr_values():
 
     
     sphere_sizes = [10, 13, 17, 22, 28, 37]
+    # Do not delete or change these values. If you want to update the values, comment the old values out.
+    # SUV_N values for N = 40 for NEMA IQ scan with background activity from the 05.11.2024
+    SUV_N = [
+        [13341.70, 23084.22, 29678.75, 30543.72, 31378.25, 31764.33], # NEMA_IQ_02
+        [13207.15, 22949.40, 29626.25, 30591.67, 31388.78, 31683.80], # NEMA_IQ_02_c
+        [15063.55, 25432.20, 31010.53, 30502.62, 31531.20, 31496.33], # NEMA_IQ_03
+        [14951.60, 25349.90, 31000.88, 30566.65, 31563.42, 31438.22], # NEMA_IQ_03_c
+        [16082.25, 26268.30, 30999.67, 30034.17, 31217.08, 31088.40], # NEMA_IQ_04
+        [15977.73, 26192.25, 30982.05, 30077.90, 31234.95, 31012.97], # NEMA_IQ_04_c
+    ]
+    '''
     SUV_N = [
     # Scan from the 05.11.2024 with a 1:4 background activity ratio
             [13341.70, 23084.22, 29678.75, 30543.72, 31378.25, 31764.33], # NEMA_IQ_02
@@ -515,7 +529,8 @@ def plot_snr_values():
             [14750.90, 24351.83, 30816.50, 31237.28, 31641.05, 31745.53], # NEMA_IQ_04_a
             [13325.77, 21627.67, 28845.83, 31810.90, 32000.35, 32332.00]  # NEMA_IQ_04_b
     ]
-    # Do not delete or change these values. If you want to update the values, comment the old values out.
+    '''
+    
     '''
     # Earlier calculated SUV_N values for N = 40 for the different sphere sizes at recon NEMA_IQ_01/_02/_03/_......
     SUV_N = [
@@ -541,11 +556,16 @@ def plot_snr_values():
     snr = 1 - nsr
     print(f"SNR values: {snr}")
     #legend_entries = ['1 iteration', '2 iterations', '3 iterations', '4 iterations', '5 iterations', '6 iterations', '7 iterations', '8 iterations']
-    legend_entries = ['2 iterations, Gauss 3x3', '2 iterations, Gauss 5x5', '2 iterations, Gauss 7x7', '3 iterations, Gauss 3x3', '3 iterations, Gauss 5x5', '3 iterations, Gauss 7x7', '4 iterations, Gauss 3x3', '4 iterations, Gauss 5x5', '4 iterations, Gauss 7x7']
+    #legend_entries = ['2 iterations, Gauss 3x3', '2 iterations, Gauss 5x5', '2 iterations, Gauss 7x7', '3 iterations, Gauss 3x3', '3 iterations, Gauss 5x5', '3 iterations, Gauss 7x7', '4 iterations, Gauss 3x3', '4 iterations, Gauss 5x5', '4 iterations, Gauss 7x7']
+    legend_entries = ['Absolute Scattering, 2i', 'Relative Scattering, 2i', 'Absolute Scattering, 3i', 'Relative Scattering, 3i', 'Absolute Scattering, 4i', 'Relative Scattering, 4i']
+   
     # Define line styles
-    line_styles = ['-', '--', '-.', '-', '--', '-.', '-', '--', '-.']
+    line_styles = ['-', '--', '-', '--', '-', '--']
+    #line_styles = ['-', '--', '-.', '-', '--', '-.', '-', '--', '-.']
+    
     # Define colors
-    colors = ['orange', 'orange', 'orange', 'green', 'green', 'green', 'red', 'red', 'red']
+    colors = ['orange', 'orange', 'green', 'green', 'red', 'red']
+    #colors = ['orange', 'orange', 'orange', 'green', 'green', 'green', 'red', 'red', 'red']
     
     # Plot the SNRs for each sphere size
     plt.figure('Signal-to-Noise Ratio vs Sphere Size')
@@ -570,10 +590,10 @@ def plot_snr_values():
     plt.show(block=False)
 
     save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//SNR"
-    png_path = os.path.join(save_path, 'NEMA_IQ_02-04-a-b_SNR_vs_sphere_size_calculated_with_SUV_40.png')
-    pdf_path = os.path.join(save_path, 'NEMA_IQ_02-04-a-b_SNR_vs_sphere_size_calculated_with_SUV_40.pdf')
-    pickle_path = os.path.join(save_path, 'NEMA_IQ_02-04-a-b_SNR_vs_sphere_size_calculated_with_SUV_40.pickle')
-    answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here: {save_path} as: {png_path}?")
+    png_path = os.path.join(save_path, 'NEMA_IQ_02-04-c_SNR_vs_sphere_size_calculated_with_SUV_40.png')
+    pdf_path = os.path.join(save_path, 'NEMA_IQ_02-04-c_SNR_vs_sphere_size_calculated_with_SUV_40.pdf')
+    pickle_path = os.path.join(save_path, 'NEMA_IQ_02-04-c_SNR_vs_sphere_size_calculated_with_SUV_40.pickle')
+    answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here:\n{save_path}\nas:\n{png_path}?")
     if answer: 
         # Save the plot as PNG, PDF, and pickle files        
         plt.savefig(png_path)

@@ -658,16 +658,18 @@ def suv_peak_with_spherical_voi():
 def plot_suv_peak_against_sphere_size(suv_peak_values, sphere_sizes):
     global current_index, loaded_folder_path, iteration_count
 
-    legend_entries = ['2 iterations, Gauss 3x3', '2 iterations, Gauss 5x5', '2 iterations, Gauss 7x7', '3 iterations, Gauss 3x3', '3 iterations, Gauss 5x5', '3 iterations, Gauss 7x7', '4 iterations, Gauss 3x3', '4 iterations, Gauss 5x5', '4 iterations, Gauss 7x7']
+    legend_entries = ['Absolute Scattering, 2i', 'Relative Scattering, 2i', 'Absolute Scattering, 3i', 'Relative Scattering, 3i', 'Absolute Scattering, 4i', 'Relative Scattering, 4i']
+    # Define line styles
+    #line_styles = ['-', '--', '-.', '-', '--', '-.', '-', '--', '-.']
+    line_styles = ['-', '--', '-', '--', '-', '--']
+    # Define colors
+    #colors = ['orange', 'orange', 'orange', 'green', 'green', 'green', 'red', 'red', 'red']
+    colors = ['orange', 'orange', 'green', 'green', 'red', 'red']
     # Increment the iteration counter for the legend of the plot
     iteration_count += 1
 
     sphere_sizes = [10, 13, 17, 22, 28, 37] # From the NEMA IQ phantom, in [mm]
-    # Define line styles
-    line_styles = ['-', '--', '-.', '-', '--', '-.', '-', '--', '-.']
-    # Define colors
-    colors = ['orange', 'orange', 'orange', 'green', 'green', 'green', 'red', 'red', 'red']
-    
+
     true_activity_concentration = 26166.28 # Calculated the theoretical activity at scan start [Bq/mL] (Daniel, 05. Nov. 2024 11:36 am)
     
     # Convert suv_peak_values to a NumPy array
@@ -692,13 +694,13 @@ def plot_suv_peak_against_sphere_size(suv_peak_values, sphere_sizes):
     plt.show(block=False)
 
     save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Recovery Coefficients"
-    answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here: {save_path}?")
+    png_path = os.path.join(save_path, 'NEMA_IQ_02_04-c_rc_calculated_with_SUV_peak_vs_sphere_size.png')
+    pdf_path = os.path.join(save_path, 'NEMA_IQ_02_04-c_rc_calculated_with_SUV_peak_vs_sphere_size.pdf')
+    pickle_path = os.path.join(save_path, 'NEMA_IQ_02_04-c_rc_calculated_with_SUV_peak_vs_sphere_size.pickle')
+    
+    answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here:\n{save_path}\nas\n{png_path}?")
     if answer: 
         # Save the plot as PNG, PDF, and pickle files
-        png_path = os.path.join(save_path, 'NEMA_IQ_02_04-a-b_rc_calculated_with_SUV_peak_vs_sphere_size.png')
-        pdf_path = os.path.join(save_path, 'NEMA_IQ_02_04-a-b_rc_calculated_with_SUV_peak_vs_sphere_size.pdf')
-        pickle_path = os.path.join(save_path, 'NEMA_IQ_02_04-a-b_rc_calculated_with_SUV_peak_vs_sphere_size.pickle')
-        
         plt.savefig(png_path)
         plt.savefig(pdf_path)
         with open(pickle_path, 'wb') as f:
@@ -831,7 +833,8 @@ def get_ir_value(masks):
     global current_index, iteration_count
     image_stack = build_image_stack()
     
-    # Do not delete or change these values. If you want to update the values, comment the old values out.
+    # Do not delete or change these SUV_N values. If you want to update the values, comment the old values out.
+    '''
     # SUV_N values for N = 40 for NEMA IQ scan with background activity from the 05.11.2024
     SUV_N = [
     
@@ -844,6 +847,16 @@ def get_ir_value(masks):
             [16082.25, 26268.30, 30999.67, 30034.17, 31217.08, 31088.40], # NEMA_IQ_04
             [14750.90, 24351.83, 30816.50, 31237.28, 31641.05, 31745.53], # NEMA_IQ_04_a
             [13325.77, 21627.67, 28845.83, 31810.90, 32000.35, 32332.00]  # NEMA_IQ_04_b
+    ]
+    '''
+    # SUV_N values for N = 40 for NEMA IQ scan with background activity from the 05.11.2024
+    SUV_N = [
+        [13341.70, 23084.22, 29678.75, 30543.72, 31378.25, 31764.33], # NEMA_IQ_02
+        [13207.15, 22949.40, 29626.25, 30591.67, 31388.78, 31683.80], # NEMA_IQ_02_c
+        [15063.55, 25432.20, 31010.53, 30502.62, 31531.20, 31496.33], # NEMA_IQ_03
+        [14951.60, 25349.90, 31000.88, 30566.65, 31563.42, 31438.22], # NEMA_IQ_03_c
+        [16082.25, 26268.30, 30999.67, 30034.17, 31217.08, 31088.40], # NEMA_IQ_04
+        [15977.73, 26192.25, 30982.05, 30077.90, 31234.95, 31012.97], # NEMA_IQ_04_c
     ]
     '''
     # Earlier calculated SUV_N values for N = 40 for the different sphere sizes at recon NEMA_IQ_01/_02/_03/_......
@@ -914,20 +927,20 @@ def get_ir_value(masks):
 
 def plot_ir_values(ir_values):
     global iteration_count
-    legend_entries = ['2 iterations, Gauss 3x3', '2 iterations, Gauss 5x5', '2 iterations, Gauss 7x7', '3 iterations, Gauss 3x3', '3 iterations, Gauss 5x5', '3 iterations, Gauss 7x7', '4 iterations, Gauss 3x3', '4 iterations, Gauss 5x5', '4 iterations, Gauss 7x7']
+    
+    legend_entries = ['Absolute Scattering, 2i', 'Relative Scattering, 2i', 'Absolute Scattering, 3i', 'Relative Scattering, 3i', 'Absolute Scattering, 4i', 'Relative Scattering, 4i']
+    # Define line styles
+    #line_styles = ['-', '--', '-.', '-', '--', '-.', '-', '--', '-.']
+    line_styles = ['-', '--', '-', '--', '-', '--']
+
+    # Define colors
+    #colors = ['orange', 'orange', 'orange', 'green', 'green', 'green', 'red', 'red', 'red']
+    colors = ['orange', 'orange', 'green', 'green', 'red', 'red']
+    
     # Increment the iteration counter for the legend of the plot
     iteration_count += 1
-    # Add the current iteration count to the legend entries
-    #if iteration_count == 1:
-    #    legend_entries.append(f'{iteration_count} iteration')
-    #else:
-    #    legend_entries.append(f'{iteration_count} iterations')
-    sphere_sizes = [10, 13, 17, 22, 28, 37]
     
-    # Define line styles
-    line_styles = ['-', '--', '-.', '-', '--', '-.', '-', '--', '-.']
-    # Define colors
-    colors = ['orange', 'orange', 'orange', 'green', 'green', 'green', 'red', 'red', 'red']
+    sphere_sizes = [10, 13, 17, 22, 28, 37]
     
     plt.figure(f'Image Roughness vs Sphere Size')
     plt.plot(sphere_sizes, ir_values, marker='o', linestyle=line_styles[iteration_count - 1], color=colors[iteration_count - 1])
@@ -945,12 +958,13 @@ def plot_ir_values(ir_values):
     plt.show(block=False)
 
     save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Image Roughness"
-    answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here: {save_path}?")
+    png_path = os.path.join(save_path, 'NEMA_IQ_02_04-c_image_roughness_within_the_spheres_calculated_with_SUV_N_40_vs_sphere_size.png')
+    pdf_path = os.path.join(save_path, 'NEMA_IQ_02_04-c_image_roughness_within_the_spheres_calculated_with_SUV_N_40_vs_sphere_size.pdf')
+    pickle_path = os.path.join(save_path, 'NEMA_IQ_02_04-c_image_roughness_within_the_spheres_calculated_with_SUV_N_40_vs_sphere_size.pickle')
+        
+    answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here: {save_path} as {png_path}?")
     if answer: 
         # Save the plot as PNG, PDF, and pickle files
-        png_path = os.path.join(save_path, 'NEMA_IQ_02_04-a-b_image_roughness_within_the_spheres_calculated_with_SUV_N_vs_sphere_size.png')
-        pdf_path = os.path.join(save_path, 'NEMA_IQ_02_04-a-b_image_roughness_within_the_spheres_calculated_with_SUV_N_vs_sphere_size.pdf')
-        pickle_path = os.path.join(save_path, 'NEMA_IQ_02_04-a-b_image_roughness_within_the_spheres_calculated_with_SUV_N_vs_sphere_size.pickle')
         
         plt.savefig(png_path)
         plt.savefig(pdf_path)
@@ -1175,8 +1189,8 @@ def process_rois_for_predefined_centers(roi_or_voi = 'roi'):
     else:
         # Centers of 6 3D spheres with a 512x512 image size, increasing sphere sizes
         #centers form first scan from 10.10.24 centers = [(current_index, 209, 270), (current_index, 217, 228), (current_index, 257, 214), (current_index, 287, 242), (current_index, 280, 282), (current_index, 242, 298)]
-        # Centers of 6 3D spheres with a 512x512 image size, increasing sphere sizes
-        centers = [(current_index, 212, 272), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 283, 281), (current_index, 245, 298)]
+        # Centers of 6 3D spheres with a 512x512 image size, increasing sphere sizes, adds the current_index to the z value later on
+        centers = [(0, 212, 272), (0, 218, 230), (0, 257, 214), (0, 290, 240), (0, 283, 281), (0, 245, 298)]
     
     radius = 15  # Covers even the biggest sphere with a diameter of 18.5 pixels (times approx. 2 mm pixel_spacing = 37 mm sphere)
     roi_masks = []
@@ -1292,7 +1306,7 @@ def draw_recovery_coefficients():
     SUV_N_07 = [20438.00, 25366.53, 27110.00, 30185.53, 31237.40, 31706.07]
     SUV_N_08 = [20131.80, 25170.27, 26933.20, 26933.20, 29963.80, 31056.60]
     '''
-
+    '''
     SUV_N = [
         # These are the SUV_N values for my NEMA IQ scan with background activity (ratio 1:4) from the 05.11.2024
         # Used a spherical VOI of the true size of the spheres, no isocontour detection becuase it was delineating pixels that were not part of the spheres
@@ -1305,25 +1319,22 @@ def draw_recovery_coefficients():
         [17914.97, 27191.67, 30674.42, 29999.25, 31397.58, 31506.95], #NEMA_IQ_07
         [17977.90, 26831.17, 30076.20, 29603.53, 31029.97, 31203.60]  #NEMA_IQ_08
     ]
-
+    '''
+    # SUV_N values for N = 40 for NEMA IQ scan with background activity from the 05.11.2024
+    SUV_N = [
+        [13341.70, 23084.22, 29678.75, 30543.72, 31378.25, 31764.33], # NEMA_IQ_02
+        [13207.15, 22949.40, 29626.25, 30591.67, 31388.78, 31683.80], # NEMA_IQ_02_c
+        [15063.55, 25432.20, 31010.53, 30502.62, 31531.20, 31496.33], # NEMA_IQ_03
+        [14951.60, 25349.90, 31000.88, 30566.65, 31563.42, 31438.22], # NEMA_IQ_03_c
+        [16082.25, 26268.30, 30999.67, 30034.17, 31217.08, 31088.40], # NEMA_IQ_04
+        [15977.73, 26192.25, 30982.05, 30077.90, 31234.95, 31012.97], # NEMA_IQ_04_c
+    ]
     #true_activity_concentration = 28136.08 # calculated the activity with the measured injected_activity and the decay constant of F-18 (in Bq) at scan start
     true_activity_concentration = 26166.28 # Calculated the theoretical activity at scan start (Daniel, 05. Nov. 2024 11:36 am) 
     # activity_conc_at_scan_end = 25593.21
     # take the true activtiy concentration as the average of the activity concentration at the start and end of the scan
     # reason: can't decay-correct as usual since it is a static image and not a dynamic one
     # true_activity_conc = ((activity_conc_at_scan_start - activity_conc_at_scan_end) / 2) + activity_conc_at_scan_end
-    
-    if False:
-        # Divide all the values of the 8 arrays by activity_conc_at_scan_start
-        SUV_N_01 = [100 * value / true_activity_concentration for value in SUV_N_01]
-        SUV_N_02 = [100 * value / true_activity_concentration for value in SUV_N_02]
-        SUV_N_03 = [100 * value / true_activity_concentration for value in SUV_N_03]
-        SUV_N_04 = [100 * value / true_activity_concentration for value in SUV_N_04]
-        SUV_N_05 = [100 * value / true_activity_concentration for value in SUV_N_05]
-        SUV_N_06 = [100 * value / true_activity_concentration for value in SUV_N_06]
-        SUV_N_07 = [100 * value / true_activity_concentration for value in SUV_N_07]
-        SUV_N_08 = [100 * value / true_activity_concentration for value in SUV_N_08]
-
     
     # Divide all the values of the 8 arrays by true_activity_concentration
     SUV_N_normalized = [[100 * value / true_activity_concentration for value in row] for row in SUV_N]
