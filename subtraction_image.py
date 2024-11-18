@@ -81,7 +81,7 @@ def display_dicom_image(ax, canvas, dicom_matrix=None):
     max_pixel_label (tk.Label): Label to display the maximum pixel value.
     """
     global current_index, dicom_images, colorbar
-
+    # test comment
     ax.clear()  # Clear the axes to refresh the image display
     if dicom_matrix is not None:
         img_slice = dicom_matrix[current_index]
