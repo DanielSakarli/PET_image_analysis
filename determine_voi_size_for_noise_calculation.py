@@ -759,7 +759,7 @@ def can_place_sphere(center, radius_pixels):
         return False
 
 def noise_vs_sphere_size():
-    global dicom_images
+    global dicom_images, roi_masks
     # Shape of the 3D image stack
     image_stack = build_image_stack()
     shape = image_stack.shape
@@ -807,6 +807,9 @@ def noise_vs_sphere_size():
         mask = create_3d_spherical_mask(center, sphere_radius, shape)
         masks.append(mask)
     
+    roi_masks = masks # Save the 3D masks in global roi_masks to display them later on
+    
+    std_values = get_std_values(image_stack, masks)
     ir_values = get_ir_value(masks)
     print(f"IR values: {ir_values}")
     masks = []
@@ -818,6 +821,22 @@ def noise_vs_sphere_size():
     #true_activity_conc = ((activity_conc_at_scan_start - activity_conc_at_scan_end) / 2) + activity_conc_at_scan_end
     print(f"True activity concentration: {activity_conc_at_scan_start:.2f} Bq/mL")
     plt.show()
+
+
+def get_std_values(image_stack, masks):
+    """
+    Calculate the standard deviation of the pixel values within the mask.
+    image_stack: 3D image stack.
+    mask: 3D boolean mask.
+    """
+    #global current_index
+    std_values = []
+    for mask in masks:
+        std_value = np.std(image_stack[mask])
+        std_values.append(std_value)
+    formatted_std_values = [f"{value:.2f}" for value in std_values]
+    print(f"Standard deviation values: {formatted_std_values}")
+    return std_values
 
 def get_ir_value(masks):
     """
@@ -948,7 +967,7 @@ def plot_ir_values(ir_values):
     plt.ylabel('Image Roughness [%]')
     plt.title('Image Roughness vs Sphere Size')
     plt.legend(legend_entries[0:iteration_count], title=f'Number of iterations: ')
-    plt.ylim(0.9995, 1.005)
+    #plt.ylim(0.9995, 1.005)
     plt.grid(True)
     plt.xticks(sphere_sizes)
     #plt.legend(recon_names, title=f'Number of iterations: ')
@@ -1011,7 +1030,7 @@ def plot_line_profiles(image_stack, centers):
         z_center, y_center, x_center = center
 
         # Add current_index (i.e. currently selected slice) to z_center
-        z_center += current_index
+        #z_center += current_index
 
         # Calculate index offsets for ±25 mm
         offset_z = int(mm_limit / slice_thickness)
@@ -1108,7 +1127,7 @@ def create_3d_spherical_mask(center, radius_pixels, shape):
     """
     global current_index
     z_center, y_center, x_center = center
-    z_center += current_index  # Add current_index (i.e. the current slice) to z_center
+    #z_center += current_index  # Add current_index (i.e. the current slice) to z_center
     depth, height, width = shape
     #print(f"Shape of the spherical mask: {shape}")
     #print(f"Center of the sphere: z: {z_center}, y: {y_center}, x: {x_center}")
@@ -1190,7 +1209,7 @@ def process_rois_for_predefined_centers(roi_or_voi = 'roi'):
         # Centers of 6 3D spheres with a 512x512 image size, increasing sphere sizes
         #centers form first scan from 10.10.24 centers = [(current_index, 209, 270), (current_index, 217, 228), (current_index, 257, 214), (current_index, 287, 242), (current_index, 280, 282), (current_index, 242, 298)]
         # Centers of 6 3D spheres with a 512x512 image size, increasing sphere sizes, adds the current_index to the z value later on
-        centers = [(0, 212, 272), (0, 218, 230), (0, 257, 214), (0, 290, 240), (0, 283, 281), (0, 245, 298)]
+        centers = [(current_index, 212, 272), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 283, 281), (current_index, 245, 298)]
     
     radius = 15  # Covers even the biggest sphere with a diameter of 18.5 pixels (times approx. 2 mm pixel_spacing = 37 mm sphere)
     roi_masks = []
