@@ -1212,10 +1212,10 @@ def process_rois_for_predefined_centers(roi_or_voi = 'roi'):
     # centers = [(200, 165), (189, 190), (160, 194), (144, 171), (154, 146), (183, 142)] 
     if roi_or_voi == 'roi':
         # Centers of 6 2D spheres with a 512x512 image size, increasing sphere sizes
-        centers = [(current_index, 212, 272), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 283, 281), (current_index, 245, 298)]
+        centers = [(current_index, 212, 273), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]
     else:
         # Centers of 6 3D spheres with a 512x512 image size, increasing sphere sizes
-        centers = [(current_index, 212, 272), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 283, 281), (current_index, 245, 298)]
+        centers = [(current_index, 212, 273), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]
     radius = 15  # Covers even the biggest sphere with a diameter of 18.5 pixels (times approx. 2 mm pixel_spacing = 37 mm sphere)
     roi_masks = []
     # roi_pixels = []  # Initialize roi_pixels as an empty list
