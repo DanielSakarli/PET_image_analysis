@@ -585,11 +585,11 @@ def plot_SUV_N(sphere_sizes, results, suv_peak_values):
 def process_suv_peak(args, radius_pixels, image_stack):
     global current_index
     z, y, x = args
-    # Adjust the z-coordinate to the current slice index (where this method is called from z stands for the sphere index,
-    # but here it stands for the slice index)
-    z = current_index
+    # Leave the z-coord. to be the sphere index because the logic from suv_peak_with_spherical_voi() 
+    # but pass on to can_place_sphere() the current_index, i.e. the slice index to place the sphere
+    # in the correct slice
     result = {'z': z, 'mean_value': 0, 'position': None}
-    index = (z, y, x)
+    index = (current_index, y, x)
     if can_place_sphere(index, radius_pixels):
         mask = create_3d_spherical_mask(index, radius_pixels, image_stack.shape)
         mean_value = get_mean_value(image_stack, mask)
@@ -624,8 +624,8 @@ def suv_peak_with_spherical_voi():
     #print(f"roi_masks content: {roi_masks_array}")
     # Assume roi_mask is a boolean 3D array
 
-    # Initialize `max_values_per_slice` as a dictionary of lists
-    max_values_per_slice = {z: [] for z in range(image_stack.shape[0])}
+    # Initialize `max_values_per_slice` as a dictionary
+    max_values_per_slice = {z: {'max_mean': 0, 'details': []} for z in range(image_stack.shape[0])}
 
     # the z values are equal to the sphere 0, sphere 1, ..., sphere 5
     valid_indices = [(z, y, x) for z, y, x in np.argwhere(roi_masks_array) if 0 <= z <= 5]
@@ -664,11 +664,15 @@ def suv_peak_with_spherical_voi():
                 z = result['z']
                 mean_value = result['mean_value']
                 position = result['position']
-                #if mean_value > max_values_per_slice[z]['max_mean']:
-                #    max_values_per_slice[z]['max_mean'] = mean_value
+                if mean_value > max_values_per_slice[z]['max_mean']:
+                    max_values_per_slice[z]['max_mean'] = mean_value
                 # From here on z stands for the slice index and not the sphere index
-                max_values_per_slice[z].append({'mean_value': mean_value, 'position': position})
-            
+                #if z == current_index:
+                #    print(f"SUV_peak calculation in sphere {z}:")
+                #    max_values_per_slice[z].append({'mean_value': mean_value, 'position': position})
+                
+            # Print the current number of elements in the list for this slice
+            print(f"Shape of max_values_per_slice[{z}]: {len(max_values_per_slice[z])}")
     except Exception as e:
         print(f"Error processing task: {e}")
     if False:
@@ -679,15 +683,16 @@ def suv_peak_with_spherical_voi():
                 print(f"  Mean value: {detail['mean_value']} at position {detail['position']}")
 
     # Extract the 6 max_mean values for z=63
-    if 63 in max_values_per_slice:
-        suv_peak_values = np.array([detail['mean_value'] for detail in max_values_per_slice[63]])
-        print(f"SUV_peak values for z=63: {suv_peak_values}")
-    else:
-        suv_peak_values = np.array([])
-        print("No results for z=63")
+    if False:
+        if 63 in max_values_per_slice:
+            suv_peak_values = np.array([detail['mean_value'] for detail in max_values_per_slice[63]])
+            print(f"SUV_peak values for z=63: {suv_peak_values}")
+        else:
+            suv_peak_values = np.array([])
+            print("No results for z=63")
 
     # Plot the SUV_peak against the sphere size
-    #suv_peak_values = [details['max_mean'] for details in max_values_per_slice.values()][:6] # takes the first 6 values (i.e. the SUV_peak of the 6 spheres)
+    suv_peak_values = [details['max_mean'] for details in max_values_per_slice.values()][:6] # takes the first 6 values (i.e. the SUV_peak of the 6 spheres)
     #sphere_sizes = [10, 13, 17, 22, 28, 37]
     
     plot_suv_peak_against_sphere_size(suv_peak_values)
@@ -713,10 +718,10 @@ def plot_suv_peak_against_sphere_size(suv_peak_values):
     true_activity_concentration = 26166.28 # Calculated the theoretical activity at scan start [Bq/mL] (Daniel, 05. Nov. 2024 11:36 am)
     
     # Convert suv_peak_values to a NumPy array
-    #suv_peak_values_array = np.array(suv_peak_values)
+    suv_peak_values_array = np.array(suv_peak_values)
     
     # Calculate the recovery coefficients   
-    recovery_coefficients = 100 * suv_peak_values / true_activity_concentration
+    recovery_coefficients = 100 * suv_peak_values_array / true_activity_concentration
 
     plt.figure(f'Recovery Coefficients vs Sphere Size')
     plt.plot(sphere_sizes, recovery_coefficients, marker='o', linestyle=line_styles[iteration_count - 1], color=colors[iteration_count - 1])
