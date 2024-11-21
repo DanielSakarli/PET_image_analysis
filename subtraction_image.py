@@ -50,6 +50,7 @@ SUV_max_values = []
 recovery_coefficients = []
 # Initialize global variables
 dicom_images = []  # List to store DICOM images
+subtraction_stack = []  # List to store subtraction images
 current_index = 0  # Current slice index
 
 
@@ -70,8 +71,8 @@ def load_dicom_images(directory):
     #print(f"Pixel array of dicom images in load_dicom_images: {dicom_images[0].pixel_array}")
     #print(f"Five maximal values of the 62nd DICOM image: {np.sort(dicom_images[61].pixel_array.flatten())[-5:]}")
     return dicom_images
-
-def display_dicom_image(ax, canvas, dicom_matrix=None):
+'''
+def display_dicom_image(dicom_image, ax, canvas):
     """
     Display a subtraction DICOM image with a color scale.
     Args:
@@ -80,38 +81,71 @@ def display_dicom_image(ax, canvas, dicom_matrix=None):
     canvas (FigureCanvasTkAgg): The tkinter canvas for matplotlib.
     max_pixel_label (tk.Label): Label to display the maximum pixel value.
     """
-    global current_index, dicom_images, colorbar
-    # test comment
-    ax.clear()  # Clear the axes to refresh the image display
-    if dicom_matrix is not None:
-        img_slice = dicom_matrix[current_index]
-        dicom_images = dicom_matrix
+    global rgb_image, roi_masks, current_index
+
+    ax.clear()
+    # print("Displaying image with ROIs:", roi_pixels)
+
+    # Check if dicom_image is already a NumPy array
+    if isinstance(dicom_image, np.ndarray):
+        img_array = dicom_image
     else:
-        img_slice = dicom_images[current_index].pixel_array
-        # Convert the image data to a numerical array (e.g., np.float32)
-        img_slice = np.frombuffer(img_slice, dtype=np.int16).reshape(dicom_images[current_index].Rows, dicom_images[current_index].Columns)
+        img_array = dicom_image.pixel_array
+
+    # Normalize the image array for display
+    norm = Normalize(vmin=img_array.min(), vmax=img_array.max())
+    normalized_img = norm(img_array)
+    
+    # Convert grayscale to RGB
+    rgb_image = plt.cm.gray(normalized_img)[:, :, :3]  # Discard alpha channel from grayscale to RGB conversion
 
     
-    # Normalize the image array to the range [-1, 1]
-    img_slice_normalized = 2 * (img_slice - np.min(img_slice)) / (np.max(img_slice) - np.min(img_slice)) - 1
+    if False:
+        if roi_pixels is not None:
+            # Set ROI pixels to red
+            for roi in roi_pixels:
+                for (x, y) in roi:
+                    if 0 <= x < img_array.shape[0] and 0 <= y < img_array.shape[1]:
+                        rgb_image[x, y] = [1, 0, 0]  # Red color for ROI pixels
 
-    # Convert the normalized data to RGB using a blue-white-red colormap
-    rgb_image = plt.cm.bwr(img_slice_normalized)
+            if False:
+                # Set ROI pixels to red
+                for (x, y) in roi_pixels:
+                    if 0 <= x < img_array.shape[0] and 0 <= y < img_array.shape[1]:
+                        rgb_image[x, y] = [1, 0, 0]  # Red color in RGB
+    if False:
+        # Define a list of colors for the ROIs
+        colors = [
+            [1, 0, 0],  # Red
+            [0, 1, 0],  # Green
+            [0, 0, 1],  # Blue
+            [1, 1, 0],  # Yellow
+            [1, 0, 1]   # Magenta
+        ]
+        # If circular ROIs are provided, set their pixels to different colors
+        if rois:
+            for i, roi_set in enumerate(rois):
+                for j, roi in enumerate(reversed(roi_set)): # Reverse the order to start with the largest ROI, so the colour of the larger roi don't cover the smaller ones (otherwise the small rois won't appear in the image)
+                    if roi is not None:
+                        x_center, y_center, radius = roi['x'], roi['y'], roi['radius']
+                        color = colors[j % len(colors)]  # Cycle through the colors
+                        for x in range(int(x_center - radius), int(x_center + radius)):
+                            for y in range(int(y_center - radius), int(y_center + radius)):
+                                if (x - x_center) ** 2 + (y - y_center) ** 2 <= radius ** 2:
+                                    if 0 <= x < img_array.shape[0] and 0 <= y < img_array.shape[1]:
+                                        rgb_image[y, x] = color  # Set the color for the ROI
+
 
     # Display the RGB image
-    im = ax.imshow(rgb_image, interpolation='nearest')
-    im.set_clim(-1, 1)  # Set the color limits to [-1, 1]
-    #ax.axis('off')  # Optionally turn off the axes
+    ax.imshow(rgb_image)
+    
+    # This function can be modified to display the maximum pixel value elsewhere or removed if not needed
+    max_pixel_value = np.max(img_array)
+    max_pixel_label.config(text=f"Max Pixel Value: {max_pixel_value}")
 
-    # Add a colorbar if needed
-    if colorbar is None:
-        colorbar = plt.colorbar(im, ax=ax, orientation='vertical', fraction=0.046, pad=0.04)
-
-    # Show plot within matplotlib's viewer
-    #plt.show()
-    # Draw the canvas
     canvas.draw()
     
+'''
 
 def ddisplay_dicom_image(dicom_image, canvas, ax, rois=None, roi_pixels=None):
     global rgb_image, roi_masks
@@ -235,22 +269,22 @@ def draw_rois():
             continue  # If invalid input, skip this ROI
     
     # Display the slice with the updated ROIs
-    display_dicom_image(canvas, ax)
+    display_dicom_image(dicom_image, canvas, ax)
 
 # Function to handle "Next" button click
 def next_slice():
-    global current_index
+    global subtraction_stack, current_index
     if current_index < len(dicom_images) - 1:
         current_index += 1
-        display_dicom_image(ax, canvas)
+        display_dicom_image(subtraction_stack, ax, canvas)
         slice_slider.set(current_index)
 
 # Function to handle "Previous" button click
 def previous_slice():
-    global current_index
+    global subtraction_stack, current_index
     if current_index > 0:
         current_index -= 1
-        display_dicom_image(ax, canvas)
+        display_dicom_image(subtraction_stack, ax, canvas)
         slice_slider.set(current_index)
 
 # Calculate background variability according to NEMA NU 2-2007
@@ -670,9 +704,9 @@ def save_selected_slice(dicom_image):
 
 # Function to handle scrollbar movement
 def on_slider_change(val):
-    global current_index
+    global current_index, subtraction_stack
     current_index = int(val)
-    display_dicom_image(ax, canvas)
+    display_dicom_image(subtraction_stack, ax, canvas)
 
 
 # Function to allow the user to select a folder and load DICOM images
@@ -686,32 +720,67 @@ def load_folder():
             current_index = 0
             loaded_folder_path = directory  # Save the path of the loaded folder
             slice_slider.config(to=len(dicom_images) - 1)  # Update scrollbar range
-            display_dicom_image(ax, canvas)  # Display the first image
+            #dicom_image = dicom_images[current_index]
+            #display_dicom_image(dicom_image, ax, canvas)  # Display the first image
         else:
             messagebox.showerror("Error", "No DICOM images found in the selected folder.")
 
 def subtract_images():
-    global dicom_images
+    global dicom_images, subtraction_stack
     # Load the two image sets
     load_folder()
     image_set_1 = dicom_images
     load_folder()
     image_set_2 = dicom_images
-    subtraction_images = []
 
-    for dicom1, dicom2 in zip(image_set_1, image_set_2):
-        image1 = dicom1.pixel_array.astype(np.float32)
-        image2 = dicom2.pixel_array.astype(np.float32)
-        subtraction_image = image1 - image2
-        subtraction_images.append(subtraction_image)
+    # Ensure both image sets have the same dimensions
+    assert len(image_set_1) == len(image_set_2), "Image sets must have the same number of slices"
+    
+    subtraction_images = [dicom1.pixel_array.astype(np.float32) - dicom2.pixel_array.astype(np.float32) 
+                          for dicom1, dicom2 in zip(image_set_1, image_set_2)]
 
-    # Convert list to a 3D NumPy array
-    subtraction_matrix = np.stack(subtraction_images)
-    print(f"Shape of subtraction matrix: {subtraction_matrix.shape}")
+        
+    # Stack the subtracted images into a 3D array
+    subtraction_stack = np.stack(subtraction_images)
+    print(f"Shape of subtraction stack: {subtraction_stack.shape}")
+    if False:
+        # Create a new DICOM object with the subtracted pixel data
+        new_dicom = image_set_1[0].copy()
+        new_dicom.PixelData = subtraction_stack.tobytes()
+        new_dicom.NumberOfFrames = subtraction_stack.shape[0]
+        new_dicom.Rows, new_dicom.Columns = subtraction_stack.shape[1], subtraction_stack.shape[2]
+        new_dicom.SamplesPerPixel = 1
+        new_dicom.PhotometricInterpretation = "MONOCHROME2"
+        new_dicom.BitsAllocated = 16
+        new_dicom.BitsStored = 16
+        new_dicom.HighBit = 15
+        new_dicom.PixelRepresentation = 1  # 1 for signed integers
+        # Convert list to a 3D NumPy array
+        #subtraction_matrix = np.stack(subtraction_images)
+        #print(f"Shape of subtraction matrix: {subtraction_matrix.shape}")
+        # Save the new dicom subtraction images in dicom_images,
+        # so that they will be displayed in the GUI
+        dicom_images = new_dicom
+    display_dicom_image(subtraction_stack, ax, canvas)
 
-    display_dicom_image(ax, canvas, subtraction_matrix)
+def display_dicom_image(subtraction_stack, ax, canvas):
+    """Display a single slice from the subtraction image stack."""
+    global current_index, colorbar
+    img_slice = subtraction_stack[current_index]
+    ax.clear()
+    im = ax.imshow(img_slice, cmap='bwr', vmin=-np.max(np.abs(subtraction_stack)), vmax=np.max(np.abs(subtraction_stack)))
+    ax.axis('off')  # Optionally turn off the axes
 
-    return subtraction_matrix
+    # Update or create colorbar
+    if colorbar:
+        colorbar.update_normal(im)
+    else:
+        colorbar = plt.colorbar(im, ax=ax, orientation='vertical', fraction=0.046, pad=0.04)
+
+    canvas.draw()
+
+
+    #return subtraction_matrix
 # Function to apply threshold and expand ROI pixels using nearest neighbor
 def apply_threshold():
     global current_index, dicom_images, threshold_entry, canvas, ax, rois, roi_pixels
@@ -1260,7 +1329,7 @@ def process_rois_for_predefined_centers(roi_or_voi = 'roi'):
         #circle_mask = (rr - center[0])**2 + (cc - center[1])**2 <= radius**2
         #roi_coords = np.column_stack(np.where(circle_mask))
         #roi_pixels.append(roi_coords)
-    display_dicom_image(canvas, ax)
+    display_dicom_image(ax, canvas)
     #display_dicom_image(selected_slice, canvas, ax, roi_pixels=roi_pixels)
   
     if False:

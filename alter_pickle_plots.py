@@ -19,14 +19,14 @@ def alter_pickle_plot(pickle_path, output_pickle_path):
     ax = fig.gca()
     
     # Subtract all y-values of the plot by 100
-    for line in ax.get_lines():
-        y_data = line.get_ydata()
-        new_y_data = y_data - 100
-        line.set_ydata(new_y_data)
+    #for line in ax.get_lines():
+    #    y_data = line.get_ydata()
+    #    new_y_data = y_data - 100
+    #    line.set_ydata(new_y_data)
     
     # Change the ylabel to "Image Roughness [%]"
-    ax.set_ylabel("Image Roughness [%]")
-    ax.set_ylim(-0.05, 0.6) # Limit the y-axis
+    #ax.set_ylabel("Image Roughness [%]")
+    ax.set_ylim(30, 120) # Limit the y-axis
     # Save the modified plot back to a pickle file
     with open(output_pickle_path, 'wb') as f:
         pickle.dump(fig, f)

@@ -856,6 +856,12 @@ def plot_recovery_coefficients():
     # Do not delete or change these SUV_N values. If you want to update the values, comment the old values out.
     # SUV_N values for N = 40 for NEMA IQ scan with background activity from the 05.11.2024
     SUV_N = [
+        [16082.25, 26268.30, 30999.67, 30034.17, 31217.08, 31088.40], # NEMA_IQ_04
+        [14750.90, 24351.83, 30816.50, 31237.28, 31641.05, 31745.53], # NEMA_IQ_04_a
+        [13325.77, 21627.67, 28845.83, 31810.90, 32000.35, 32332.00]  # NEMA_IQ_04_b
+    ]
+    '''
+    SUV_N = [
         [13341.70, 23084.22, 29678.75, 30543.72, 31378.25, 31764.33], # NEMA_IQ_02
         [13207.15, 22949.40, 29626.25, 30591.67, 31388.78, 31683.80], # NEMA_IQ_02_c
         [15063.55, 25432.20, 31010.53, 30502.62, 31531.20, 31496.33], # NEMA_IQ_03
@@ -863,6 +869,7 @@ def plot_recovery_coefficients():
         [16082.25, 26268.30, 30999.67, 30034.17, 31217.08, 31088.40], # NEMA_IQ_04
         [15977.73, 26192.25, 30982.05, 30077.90, 31234.95, 31012.97], # NEMA_IQ_04_c
     ]
+    '''
     '''
     SUV_N = [
     # Scan from the 05.11.2024 with a 1:4 background activity ratio
@@ -899,24 +906,27 @@ def plot_recovery_coefficients():
     SUV_N_array = np.array(SUV_N)
     recovery_coefficients = 100 * SUV_N_array / true_activity_concentration
     print(f"Shape of recovery_coeff: ", recovery_coefficients.shape)
-    legend_entries = ['Absolute Scattering, 2i', 'Relative Scattering, 2i', 'Absolute Scattering, 3i', 'Relative Scattering, 3i', 'Absolute Scattering, 4i', 'Relative Scattering, 4i']
+    #legend_entries = ['Absolute Scattering, 2i', 'Relative Scattering, 2i', 'Absolute Scattering, 3i', 'Relative Scattering, 3i', 'Absolute Scattering, 4i', 'Relative Scattering, 4i']
+    legend_entries = ['4i, Gauss 3x3', '4i, Gauss 5x5', '4i, Gauss 7x7']
     # Define line styles
-    #line_styles = ['-', '--', '-.', '-', '--', '-.', '-', '--', '-.']
-    line_styles = ['-', '--', '-', '--', '-', '--']
+    line_styles = ['-', '--', '-.', '-', '--', '-.', '-', '--', '-.']
+    #line_styles = ['-', '--', '-', '--', '-', '--']
     # Define colors
     #colors = ['orange', 'orange', 'orange', 'green', 'green', 'green', 'red', 'red', 'red']
-    colors = ['orange', 'orange', 'green', 'green', 'red', 'red']
+    #colors = ['orange', 'orange', 'green', 'green', 'red', 'red']
+    colors = ['red', 'red', 'red']
     # Plot each SUV array against the voi_sizes
     plt.figure('Recovery Coefficients')
     # Plot the recovery coefficients
     for i, rc in enumerate(recovery_coefficients):
         plt.plot(sphere_sizes, rc, marker='o', linestyle=line_styles[i], color=colors[i], label=legend_entries[i])
+        
     
     # Add labels and legend
-    plt.xlabel('Sphere Size [mm]')
+    plt.legend(title='Number of iterations i:')
+    plt.xlabel('Sphere Sizes [mm]')
     plt.ylabel('Recovery Coefficient [%]')
     plt.title('Recovery Coefficients Calculated with $SUV_{40}$')
-    plt.legend()
     plt.grid(True)
     plt.xticks(sphere_sizes)  # Set x-ticks to the exact sphere sizes
     plt.ylim(40, 130)
@@ -924,9 +934,9 @@ def plot_recovery_coefficients():
     plt.show(block=False)
 
     save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Recovery Coefficients"
-    png_path = os.path.join(save_path, 'NEMA_IQ_02_04-c_rc_with_SUV_40_vs_sphere_size.png')
-    pdf_path = os.path.join(save_path, 'NEMA_IQ_02_04-c_rc_with_SUV_40_vs_sphere_size.pdf')
-    pickle_path = os.path.join(save_path, 'NEMA_IQ_02_04-c_rc_with_SUV_40_vs_sphere_size.pickle')
+    png_path = os.path.join(save_path, 'NEMA_IQ_04_a-b_rc_with_SUV_40_vs_sphere_size.png')
+    pdf_path = os.path.join(save_path, 'NEMA_IQ_04_a-b_rc_with_SUV_40_vs_sphere_size.pdf')
+    pickle_path = os.path.join(save_path, 'NEMA_IQ_04_a-b_rc_with_SUV_40_vs_sphere_size.pickle')
     answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here:\n{save_path}\nas\n{png_path}?")
     if answer: 
         # Save the plot as PNG, PDF, and pickle files

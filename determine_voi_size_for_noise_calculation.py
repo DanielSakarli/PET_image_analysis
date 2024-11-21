@@ -702,14 +702,15 @@ def plot_suv_peak_against_sphere_size(suv_peak_values):
     global current_index, loaded_folder_path, iteration_count
 
     #legend_entries = ['Absolute Scattering, 2i', 'Relative Scattering, 2i', 'Absolute Scattering, 3i', 'Relative Scattering, 3i', 'Absolute Scattering, 4i', 'Relative Scattering, 4i']
-    legend_entries = ['4i, Gauss 3x3', '4i, Gauss 5x5', '4i, Gauss 7x7']
+    #legend_entries = ['4i, Gauss 3x3', '4i, Gauss 5x5', '4i, Gauss 7x7']
+    legend_entries = ['1 iteration', '2 iterations', '3 iterations', '4 iterations', '5 iterations', '6 iterations', '7 iterations', '8 iterations']
     # Define line styles
-    line_styles = ['-', '--', '-.', '-', '--', '-.', '-', '--', '-.']
+    #line_styles = ['-', '--', '-.', '-', '--', '-.', '-', '--', '-.']
     #line_styles = ['-', '--', '-', '--', '-', '--']
     # Define colors
     #colors = ['orange', 'orange', 'orange', 'green', 'green', 'green', 'red', 'red', 'red']
     #colors = ['orange', 'orange', 'green', 'green', 'red', 'red']
-    colors = ['red', 'red', 'red']
+    #colors = ['red', 'red', 'red']
     # Increment the iteration counter for the legend of the plot
     iteration_count += 1
 
@@ -719,16 +720,16 @@ def plot_suv_peak_against_sphere_size(suv_peak_values):
     
     # Convert suv_peak_values to a NumPy array
     suv_peak_values_array = np.array(suv_peak_values)
-    
+    print(f"SUV_peak values: {suv_peak_values_array}")
     # Calculate the recovery coefficients   
     recovery_coefficients = 100 * suv_peak_values_array / true_activity_concentration
 
     plt.figure(f'Recovery Coefficients vs Sphere Size')
-    plt.plot(sphere_sizes, recovery_coefficients, marker='o', linestyle=line_styles[iteration_count - 1], color=colors[iteration_count - 1])
+    plt.plot(sphere_sizes, recovery_coefficients, marker='o') #, linestyle=line_styles[iteration_count - 1], color=colors[iteration_count - 1])
     plt.xlabel('Sphere Sizes [mm]')
     plt.ylabel('Recovery Coefficient [%]')
     plt.title('Recovery Coefficients Calculated with SUV$_{peak}$')
-    plt.legend(legend_entries[0:iteration_count], title=f'Number of iterations i: ')
+    plt.legend(legend_entries[0:iteration_count])#, title=f'Number of iterations i: ')
     plt.ylim(30, 110)
     plt.grid(True)
     plt.xticks(sphere_sizes)
@@ -739,12 +740,12 @@ def plot_suv_peak_against_sphere_size(suv_peak_values):
     plt.show(block=False)
 
     save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Recovery Coefficients"
-    png_path = os.path.join(save_path, 'NEMA_IQ_04_a-b_rc_calculated_with_SUV_peak_vs_sphere_size.png')
-    pdf_path = os.path.join(save_path, 'NEMA_IQ_04_a-b_rc_calculated_with_SUV_peak_vs_sphere_size.pdf')
-    pickle_path = os.path.join(save_path, 'NEMA_IQ_04_a-b_rc_calculated_with_SUV_peak_vs_sphere_size.pickle')
+    png_path = os.path.join(save_path, 'NEMA_IQ_01_08_rc_calculated_with_SUV_peak_vs_sphere_size.png')
+    pdf_path = os.path.join(save_path, 'NEMA_IQ_01_08_rc_calculated_with_SUV_peak_vs_sphere_size.pdf')
+    pickle_path = os.path.join(save_path, 'NEMA_IQ_01_08_rc_calculated_with_SUV_peak_vs_sphere_size.pickle')
     
     answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here:\n{save_path}\nas\n{png_path}?")
-    if answer: 
+    if answer:
         # Save the plot as PNG, PDF, and pickle files
         plt.savefig(png_path)
         plt.savefig(pdf_path)

@@ -461,8 +461,8 @@ def plot_ir_values(ir_values):
     #legend_entries = ['Absolute Scattering, 2i', 'Relative Scattering, 2i', 'Absolute Scattering, 3i', 'Relative Scattering, 3i', 'Absolute Scattering, 4i', 'Relative Scattering, 4i']
     legend_entries = ['2i, Gauss 3x3', '2i, Gauss 5x5', '2i, Gauss 7x7', '3i, Gauss 3x3', '3i, Gauss 5x5', '3i, Gauss 7x7']
     # Define line styles
-    #line_styles = ['-', '--', '-.', '-', '--', '-.', '-', '--', '-.']
-    line_styles = ['-', '--', '-', '--', '-', '--']
+    line_styles = ['-', '--', '-.', '-', '--', '-.', '-', '--', '-.']
+    #line_styles = ['-', '--', '-', '--', '-', '--']
     # Define colors
     colors = ['orange', 'orange', 'orange', 'green', 'green', 'green', 'red', 'red', 'red']
     #colors = ['orange', 'orange', 'green', 'green', 'red', 'red']
