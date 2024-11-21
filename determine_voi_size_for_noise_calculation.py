@@ -178,7 +178,7 @@ def draw_rois():
             y = int(roi_entries[i]['y'].get())
 
             # Divide the radius by the pixel spacing to convert from mm to pixels
-            rois[i][0] = {'x': x, 'y': y, 'radius': 10/2/pixel_spacing[0]}  # Circular 37 mm diameter ROI
+            rois[i][0] = {'x': x, 'y': y, 'radius': 10/2/pixel_spacing[0]}  # Circular 10 mm diameter ROI
             rois[i][1] = {'x': x, 'y': y, 'radius': 13/2/pixel_spacing[0]}  # Inner ROIs with decreasing diameters
             rois[i][2] = {'x': x, 'y': y, 'radius': 17/2/pixel_spacing[0]}
             rois[i][3] = {'x': x, 'y': y, 'radius': 22/2/pixel_spacing[0]}
@@ -1243,7 +1243,13 @@ def build_image_stack():
 
 def create_isocontour_roi(img_array, center, radius, threshold):
     """ Creates a binary mask for the isocontour ROI based on the threshold. """
-    y_center, x_center = center
+    if len(center) == 2:
+        y_center, x_center = center
+    elif len(center) == 3:
+        z_center, y_center, x_center = center
+    else:
+        raise ValueError("Center should be a 2D or 3D coordinate")
+    
     mask = np.zeros_like(img_array, dtype=bool)
     # Rows (y coord.)
     for y in range(max(0, int(y_center - radius)), min(img_array.shape[0], int(y_center + radius) + 1)):
@@ -1275,26 +1281,45 @@ def process_rois_for_predefined_centers(roi_or_voi = 'roi'):
     image_stack = build_image_stack()
     shape = image_stack.shape
     selected_slice = image_stack[current_index]
+    recovery_coefficients = []
     print(f"Selected slice: {selected_slice}")
     print(f"Maximum of selected slice: {np.max(selected_slice)}")
     print(f"Shape of selected slice: {selected_slice.shape}")
+
+    # This flag is used to decide wether to use the isocontour thresholding or just define the voi size
+    # to be the same as the actual sphere size. True: isocontour thresholding, False: define voi size as sphere size
+    flag_thresholding = False
+    # flag for the spherical RC_mean in all spheres (10 - 37 mm)
+    flag_spherical_RC_mean_all_spheres = False
+    # flag for the spherical RC_mean in the smallest sphere (10 mm)
+    flag_spherical_RC_mean_in_small_sphere = False
+    # flag for the cylindrical RC_mean in the smallest sphere (10 mm)
+    flag_cylindrical_RC_mean_in_small_sphere = False
+    # flag for the spherical RC_mean in the background
+    flag_spherical_RC_mean_in_background = False
+
     # Centers of 6 2D spheres with a 344x344 image size, increasing sphere sizes
     # centers = [(200, 165), (189, 190), (160, 194), (144, 171), (154, 146), (183, 142)] 
-    if roi_or_voi == 'roi':
-        # Centers of 6 2D spheres with a 512x512 image size, increasing sphere sizes
-        centers = [(current_index, 212, 273), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]
-    else:
-        # Centers of 6 3D spheres with a 512x512 image size, increasing sphere sizes
-        #centers form first scan from 10.10.24 centers = [(current_index, 209, 270), (current_index, 217, 228), (current_index, 257, 214), (current_index, 287, 242), (current_index, 280, 282), (current_index, 242, 298)]
-        # Centers of 6 3D spheres with a 512x512 image size, increasing sphere sizes, adds the current_index to the z value later on
-        centers = [(current_index, 212, 273), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]
-    
+    if flag_spherical_RC_mean_all_spheres:
+        if roi_or_voi == 'roi':
+            # Centers of 6 2D spheres with a 512x512 image size, increasing sphere sizes
+            centers = [(current_index, 212, 273), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]
+            sphere_sizes = [10, 13, 17, 22, 28, 37]  # in mm
+        else:
+            # Centers of 6 3D spheres with a 512x512 image size, increasing sphere sizes
+            #centers form first scan from 10.10.24 centers = [(current_index, 209, 270), (current_index, 217, 228), (current_index, 257, 214), (current_index, 287, 242), (current_index, 280, 282), (current_index, 242, 298)]
+            # Centers of 6 3D spheres with a 512x512 image size, increasing sphere sizes, adds the current_index to the z value later on
+            centers = [(current_index, 212, 273), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]
+            sphere_sizes = [10, 13, 17, 22, 28, 37]  # in mm
+    elif flag_spherical_RC_mean_in_small_sphere:
+        centers = [(current_index, 212, 273)]    
+        sphere_sizes = np.arrange(1, 38, 1) # in mm
     radius = 15  # Covers even the biggest sphere with a diameter of 18.5 pixels (times approx. 2 mm pixel_spacing = 37 mm sphere)
     roi_masks = []
     # roi_pixels = []  # Initialize roi_pixels as an empty list
-    sphere_sizes = [10, 13, 17, 22, 28, 37]  # in mm
+    
 
-    for i, center in enumerate(centers):
+    for i, sphere_size  in enumerate(sphere_sizes):
         # Assuming a threshold of 40% of the max value within each sphere's bounding box
         #local_max = np.max(selected_slice[
         #    max(0, center[0] - radius):min(selected_slice.shape[0], center[0] + radius),
@@ -1302,32 +1327,49 @@ def process_rois_for_predefined_centers(roi_or_voi = 'roi'):
         #])
         #true_activity_concentration = 28136.08 #Calculated the theoretical activity at scan start (Daniel, 10. Oct. 2024 12:22 pm)
         true_activity_concentration = 26166.28 #Calculated the theoretical activity at scan start (Daniel, 05. Nov. 2024 11:36 am)
-        threshold = 0.4 * true_activity_concentration #local_max
-        if roi_or_voi == 'roi':
-            #Following line commented out because isocontour threshold didn't perfectly delineate the sphere
-            #roi_mask_temp = create_isocontour_roi(selected_slice, center, radius, threshold)
+        #threshold = 0.4 * true_activity_concentration #local_max
+        if flag_spherical_RC_mean_all_spheres:
+            center = centers[i] # take the center of all spheres
+        elif flag_spherical_RC_mean_in_small_sphere:
+            center = centers[0] # always take the center of the smallest sphere
+
+        if flag_thresholding:
+            # Create ROI/VOI by isocontouring
+            # Get the threshold to be used as the max value within a 3D spherical mask
+            # For this, first calculate the 3D spherical mask
             radius_mm = sphere_sizes[i] / 2
-            
-            # Read in the pixel size of the DICOM image
-            pixel_spacing = dicom_images[0][0x0028, 0x0030].value
-            radius_pixels = radius_mm / pixel_spacing[0]
-            roi_mask_temp = create_2d_spherical_mask(center, radius_pixels, shape)
-        else:
-            #Following line commented out because isocontour threshold didn't perfectly delineate the sphere
-            #roi_mask_temp = create_isocontour_voi_3d(image_stack, center, radius, threshold)
-            
-            radius_mm = sphere_sizes[i] / 2
-            
             # Read in the pixel size of the DICOM image
             pixel_spacing = dicom_images[0][0x0028, 0x0030].value
             radius_pixels = radius_mm / pixel_spacing[0]
             roi_mask_temp = create_3d_spherical_mask(center, radius_pixels, shape)
-        if False:
+            threshold = np.max(image_stack[roi_mask_temp]) * 0.41 # to be used for isocontouring
+            
+            print(f"Threshold:", threshold)
+
+            # Create masks with already calculated threshold
             if roi_or_voi == 'roi':
                 roi_mask_temp = create_isocontour_roi(selected_slice, center, radius, threshold)
             else:
                 roi_mask_temp = create_isocontour_voi_3d(image_stack, center, radius, threshold)
-        print(f"VOI {len(roi_masks) + 1} - Threshold: {threshold:.2f}, Max Value: {true_activity_concentration:.2f}, Number of Pixels: {np.sum(roi_mask_temp)}")
+            print(f"VOI {len(roi_masks) + 1} - Threshold: {threshold:.2f}, Max Value: {true_activity_concentration:.2f}, Number of Pixels: {np.sum(roi_mask_temp)}")
+        else:
+            # Create ROI/VOI by defining the size to be the same as the sphere size
+            if roi_or_voi == 'roi':
+                radius_mm = sphere_sizes[i] / 2
+                
+                # Read in the pixel size of the DICOM image
+                pixel_spacing = dicom_images[0][0x0028, 0x0030].value
+                radius_pixels = radius_mm / pixel_spacing[0]
+                roi_mask_temp = create_2d_spherical_mask(center, radius_pixels, shape)
+            else:
+                radius_mm = sphere_sizes[i] / 2
+                
+                # Read in the pixel size of the DICOM image
+                pixel_spacing = dicom_images[0][0x0028, 0x0030].value
+                radius_pixels = radius_mm / pixel_spacing[0]
+                roi_mask_temp = create_3d_spherical_mask(center, radius_pixels, shape)
+            print(f"VOI {len(roi_masks) + 1}, Max Value: {true_activity_concentration:.2f}, Number of Pixels: {np.sum(roi_mask_temp)}")
+        
         roi_masks.append(roi_mask_temp)
     print(f"roi_masks: {roi_masks}")
         # Create circular ROI and extract coordinate pairs to see if the radius of the max value search and the ROIs in which the max value is searched is correct
@@ -1373,7 +1415,7 @@ def process_rois_for_predefined_centers(roi_or_voi = 'roi'):
     # Calculate the recovery coefficient of the different ROIs using the stored mean values
     print(f"True activity: {true_activity_concentration:.2f}")
     for i, mean_value in enumerate(mean_values):
-        recovery_coefficient = mean_value / true_activity_concentration
+        recovery_coefficient = 100 * mean_value / true_activity_concentration
         recovery_coefficients.append(recovery_coefficient)
         print(f"Recovery coefficient for VOI {i + 1}: {recovery_coefficient:.2f}")
 
@@ -1385,10 +1427,12 @@ def process_rois_for_predefined_centers(roi_or_voi = 'roi'):
     # Convert roi_masks to a NumPy array
     roi_masks_array = np.array(roi_masks)
     print(f"Roi masks shape: {roi_masks_array.shape}")
+    plot_recovery_coefficients(recovery_coefficients)
+
     return roi_masks
 
 
-def plot_recovery_coefficients():
+def plot_recovery_coefficients(recovery_coefficients=None):
     global iteration_count
     
     '''
@@ -1417,14 +1461,6 @@ def plot_recovery_coefficients():
         [17977.90, 26831.17, 30076.20, 29603.53, 31029.97, 31203.60]  #NEMA_IQ_08
     ]
     '''
-    SUV_N = [
-            [13341.70, 23084.22, 29678.75, 30543.72, 31378.25, 31764.33], # NEMA_IQ_02
-            [12482.75, 21252.53, 28507.85, 31075.72, 31578.72, 32145.90], # NEMA_IQ_02_a
-            [11556.73, 18945.58, 26116.03, 30529.75, 31494.72, 32348.22], # NEMA_IQ_02_b
-            [15063.55, 25432.20, 31010.53, 30502.62, 31531.20, 31496.33], # NEMA_IQ_03
-            [13918.33, 23452.40, 30370.70, 31493.33, 31815.47, 32053.58], # NEMA_IQ_03_a
-            [12649.10, 20726.67, 27998.78, 31479.95, 31848.30, 32322.97], # NEMA_IQ_03_b
-    ]
     '''
     # SUV_N values for N = 40 for NEMA IQ scan with background activity from the 05.11.2024
     SUV_N = [
@@ -1442,50 +1478,63 @@ def plot_recovery_coefficients():
     # take the true activtiy concentration as the average of the activity concentration at the start and end of the scan
     # reason: can't decay-correct as usual since it is a static image and not a dynamic one
     # true_activity_conc = ((activity_conc_at_scan_start - activity_conc_at_scan_end) / 2) + activity_conc_at_scan_end
-    
-    # Divide all the values of the 8 arrays by true_activity_concentration
-    recovery_coefficients = [[100 * value / true_activity_concentration for value in row] for row in SUV_N]
-    legend_entries = ['4i, Gauss 3x3', '4i, Gauss 5x5', '4i, Gauss 7x7']
+    if recovery_coefficients is None:
+        # If no recovery coefficients are provided, calculate them from the SUV_N values
+        # Divide all the values of the 8 arrays by true_activity_concentration
+        SUV_N = [
+                [13341.70, 23084.22, 29678.75, 30543.72, 31378.25, 31764.33], # NEMA_IQ_02
+                [12482.75, 21252.53, 28507.85, 31075.72, 31578.72, 32145.90], # NEMA_IQ_02_a
+                [11556.73, 18945.58, 26116.03, 30529.75, 31494.72, 32348.22], # NEMA_IQ_02_b
+                [15063.55, 25432.20, 31010.53, 30502.62, 31531.20, 31496.33], # NEMA_IQ_03
+                [13918.33, 23452.40, 30370.70, 31493.33, 31815.47, 32053.58], # NEMA_IQ_03_a
+                [12649.10, 20726.67, 27998.78, 31479.95, 31848.30, 32322.97], # NEMA_IQ_03_b
+        ]
+        recovery_coefficients = [[100 * value / true_activity_concentration for value in row] for row in SUV_N]
+    #legend_entries = ['4i, Gauss 3x3', '4i, Gauss 5x5', '4i, Gauss 7x7']
+    legend_entries = ['1 iteration', '2 iterations', '3 iterations', '4 iterations', '5 iterations', '6 iterations', '7 iterations', '8 iterations']
     # Define line styles
-    line_styles = ['-', '--', '-.', '-', '--', '-.', '-', '--', '-.']
+    #line_styles = ['-', '--', '-.', '-', '--', '-.', '-', '--', '-.']
     #line_styles = ['-', '--', '-', '--', '-', '--']
     # Define colors
     #colors = ['orange', 'orange', 'orange', 'green', 'green', 'green', 'red', 'red', 'red']
     #colors = ['orange', 'orange', 'green', 'green', 'red', 'red']
-    colors = ['red', 'red', 'red']
+    #colors = ['red', 'red', 'red']
     # Increment the iteration counter for the legend of the plot
-    iteration_count += 1
 
     sphere_sizes = [10, 13, 17, 22, 28, 37] # From the NEMA IQ phantom, in [mm]
 
-    sphere_sizes = [10, 13, 17, 22, 28, 37]
     # Plot each SUV array against the voi_sizes
     plt.figure('Recovery Coefficients')
-    for i, recovery_coefficient in enumerate(recovery_coefficients):
-        plt.plot(sphere_sizes, recovery_coefficient, marker='o', linestyle=line_styles[i], color=colors[i], label=legend_entries[i])
+    #for recovery_coefficient in recovery_coefficients:
+    plt.plot(sphere_sizes, recovery_coefficients, marker='o', label=legend_entries[iteration_count]) # , linestyle=line_styles[i], color=colors[i], 
 
     # Add labels and legend
     plt.xlabel('Sphere Size [mm]')
     plt.ylabel('Recovery Coefficient [%]')
-    plt.title('Recovery Coefficients vs Sphere Size calculated with SUV$_{40}$')
+    plt.title('Recovery Coefficients vs Sphere Size calculated with c$_{mean}$') #SUV$_{40}$
     plt.legend()
     plt.grid(True)
     plt.xticks(sphere_sizes)  # Set x-ticks to the exact sphere sizes
-    plt.ylim(30, 130)
-    plt.show()
-    if False:
-        # Get the parent directory of loaded_folder_path
-        parent_directory = os.path.dirname(loaded_folder_path)
+    plt.ylim(00, 100)
 
-        # Save the plot as PNG and pickle
-        png_path = os.path.join(parent_directory, f'Recovery_coefficients_vs_sphere_size.png')
-        pickle_path = os.path.join(parent_directory, f'Recovery_coefficients_vs_sphere_size.pickle')
-
+    # Show the plot to the user
+    plt.show(block=False)
+    iteration_count += 1
+    save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Recovery Coefficients"
+    png_path = os.path.join(save_path, 'NEMA_IQ_01_08_rc_calculated_with_SUV_mean__vs_sphere_size.png')
+    pdf_path = os.path.join(save_path, 'NEMA_IQ_01_08_rc_calculated_with_SUV_mean_vs_sphere_size.pdf')
+    pickle_path = os.path.join(save_path, 'NEMA_IQ_01_08_rc_calculated_with_SUV_mean_VOI_vs_sphere_size.pickle')
+    
+    answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here:\n{save_path}\nas\n{png_path}?")
+    if answer:
+        # Save the plot as PNG, PDF, and pickle files
         plt.savefig(png_path)
+        plt.savefig(pdf_path)
         with open(pickle_path, 'wb') as f:
             pickle.dump(plt.gcf(), f)
 
-        plt.show()
+    # Show the plot again to ensure it remains visible
+    plt.show() 
 
     #plt.show()  # Show the plot and block interaction until closed
     #plt.close(fig)  # Ensure the figure is closed after displaying
