@@ -809,36 +809,54 @@ def noise_vs_sphere_size():
     # Shape of the 3D image stack
     image_stack = build_image_stack()
     shape = image_stack.shape
+
+    # If this flag is true we use the same center for all spheres and increase the
+    # sphere size continuously (1 to 38 mm)
+    flag_continuous_sphere_sizes = True
     # Center of smallest 3D sphere with a 512x512 image size
     #center = (0, 209, 270) # for the z value, the method create_3d_spherical_mask is adjusted to add the current_index (i.e. the slice number)
     #center = (0, 242, 298) # biggest sphere center position
     # Centers of 6 3D spheres with a 512x512 image size, increasing sphere sizes. For the first NEMA IQ scan from the 10.10.2024
     #centers = [(0, 212, 272), (0, 217, 228), (0, 257, 214), (0, 287, 242), (0, 280, 282), (0, 242, 298)]
     # Centers of 6 3D spheres with a 512x512 image size, increasing sphere sizes. For the second NEMA IQ scan from the 05.11.2024
-    centers = [(current_index, 212, 273), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]
+    if flag_continuous_sphere_sizes:
+        centers = [(current_index, 280, 180)]
+    else:
+        centers = [(current_index, 212, 273), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]
+    
     # Centers of 6 3D spheres with a 344x344 image size, increasing sphere sizes
     # centers = [(0, 142, 183), (0, 146, 154), (0, 172, 144), (0, 194, 161), (0, 190, 189), (0, 165, 200)] 
     
-    plot_line_profiles(image_stack, centers)
+    #plot_line_profiles(image_stack, centers)
 
     # VOI radius in pixels for plot_mean_vs_sphere_size()
     #voi_sizes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13] # intentionally goes over the borders of the actual sphere size to see how the noise and mean behave over the sphere size border
-    sphere_sizes = [10, 13, 17, 22, 28, 37]  # in mm
-    # Calculates the pixel size of the sphere_sizes
-    pixel_spacing = dicom_images[0][0x0028, 0x0030].value
-    sphere_sizes = [size / 2 / pixel_spacing[0] for size in sphere_sizes]
-    print(f"Sphere sizes in pixels: {sphere_sizes}")
+    
+    if flag_continuous_sphere_sizes:
+        sphere_sizes = np.arange(1, 38, 1) # in mm
+    else:
+        sphere_sizes = [10, 13, 17, 22, 28, 37]  # in mm
+    
     masks = []
     ir_values = [] # image roughness values (i.e. the noise)
     
-    for center, sphere_radius in zip(centers, sphere_sizes):
-        mask = create_3d_spherical_mask(center, sphere_radius, shape)
+    for i, sphere_size  in enumerate(sphere_sizes):
+    #for center, sphere_radius in zip(centers, sphere_sizes):
+        if flag_continuous_sphere_sizes:
+            center = centers[0]
+        else:
+            center = centers[i]
+        radius_mm = sphere_size / 2
+        # Read in the pixel size of the DICOM image
+        pixel_spacing = dicom_images[0][0x0028, 0x0030].value
+        radius_pixels = radius_mm / pixel_spacing[0]
+        mask = create_3d_spherical_mask(center, radius_pixels, shape)
         masks.append(mask)
     
     roi_masks = masks # Save the 3D masks in global roi_masks to display them later on
     
-    ir_values = get_ir_value(masks) 
-    std_values = get_std_values(image_stack, masks) #If get_ir_value is commented out: include iteration_count += 1 in get_std_values
+    ir_values = get_ir_value(masks, sphere_sizes) 
+    std_values = get_std_values(image_stack, masks, sphere_sizes) #If get_ir_value is commented out: include iteration_count += 1 in get_std_values
     
     print(f"IR values: {ir_values}")
     
@@ -852,7 +870,7 @@ def noise_vs_sphere_size():
     plt.show()
 
 
-def get_std_values(image_stack, masks):
+def get_std_values(image_stack, masks, sphere_sizes):
     """
     Calculate the standard deviation of the pixel values within the mask.
     image_stack: 3D image stack.
@@ -863,18 +881,26 @@ def get_std_values(image_stack, masks):
     for mask in masks:
         std_value = np.std(image_stack[mask])
         std_values.append(std_value)
+    # Convert std_values to a NumPy array
+    std_values = np.array(std_values)
+
+    # Convert all stds == 0 to nan to prevent these values from being plotted
+    std_values = np.where(std_values == 0, np.nan, std_values)
+
+    # Format the standard deviation values to 2 decimal places
     formatted_std_values = [f"{value:.2f}" for value in std_values]
+
     print(f"Standard deviation values: {formatted_std_values}")
-    plot_std_values(std_values)
+    plot_std_values(std_values, sphere_sizes)
     return std_values
 
-def plot_std_values(std_values):
+def plot_std_values(std_values, sphere_sizes):
     global current_index, loaded_folder_path, iteration_count
 
-    #legend_entries = ['1 iteration', '2 iterations', '3 iterations', '4 iterations', '5 iterations', '6 iterations', '7 iterations', '8 iterations']
-    legend_entries = ['2i, Absolute Scattering', '2i, Relative Scattering', '3i, Absolute Scattering', '3i, Relative Scattering', '4i, Absolute Scattering', '4i, Relative Scattering']
+    legend_entries = ['1 iteration', '2 iterations', '3 iterations', '4 iterations', '5 iterations', '6 iterations', '7 iterations', '8 iterations']
+    #legend_entries = ['2i, Absolute Scattering', '2i, Relative Scattering', '3i, Absolute Scattering', '3i, Relative Scattering', '4i, Absolute Scattering', '4i, Relative Scattering']
     #legend_entries = ['2i, Gauss 3x3', '2i, Gauss 5x5', '2i, Gauss 7x7', '3i, Gauss 3x3', '3i, Gauss 5x5', '3i, Gauss 7x7', '4i, Gauss 3x3', '4i, Gauss 5x5', '4i, Gauss 7x7']
-    sphere_sizes = [10, 13, 17, 22, 28, 37]
+    #sphere_sizes = [10, 13, 17, 22, 28, 37]
     # Define line styles
     #line_styles = ['-', '--', '-.', '-', '--', '-.', '-', '--', '-.']
     line_styles = ['-', '--', '-', '--', '-', '--']
@@ -883,13 +909,13 @@ def plot_std_values(std_values):
     colors = ['orange', 'orange', 'green', 'green', 'red', 'red']
 
     plt.figure(f'Standard Deviation vs Sphere Size')
-    plt.plot(sphere_sizes, std_values, marker='o', linestyle=line_styles[iteration_count - 1], color=colors[iteration_count - 1])
-    plt.xlabel('Sphere Sizes [mm]')
+    plt.plot(sphere_sizes, std_values, marker='o')#, linestyle=line_styles[iteration_count - 1], color=colors[iteration_count - 1])
+    plt.xlabel('Spherical VOI Diameter [mm]')
     plt.ylabel('Standard Deviation [Bq/mL]')
-    plt.title('Standard Deviation vs Sphere Size')
+    plt.title('Standard Deviation in Background vs VOI Size')
+    plt.ylim(0, 500)
     # iteration_count += 1 Do not increment here, because we do calculation of ir before std calculation and there iteration_count is incremented
-    plt.legend(legend_entries[0:iteration_count], title=f'Number of iterations i: ')
-    plt.ylim(0, 9000)
+    plt.legend(legend_entries[0:iteration_count])#, title=f'Number of iterations i: ')
     plt.grid(True)
     plt.xticks(sphere_sizes)   
     plt.draw()
@@ -898,9 +924,9 @@ def plot_std_values(std_values):
     plt.show(block=False)
 
     save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Standard Deviation"
-    png_path = os.path.join(save_path,    'NEMA_IQ_02_04_c_Std_vs_sphere_size.png')
-    pdf_path = os.path.join(save_path,    'NEMA_IQ_02_04_c_Std_vs_sphere_size.pdf')
-    pickle_path = os.path.join(save_path, 'NEMA_IQ_02_04_c_Std_vs_sphere_size.pickle')
+    png_path = os.path.join(save_path,    'NEMA_IQ_01_08_Std_in_background_vs_sphere_size.png')
+    pdf_path = os.path.join(save_path,    'NEMA_IQ_01_08_Std_in_background_vs_sphere_size.pdf')
+    pickle_path = os.path.join(save_path, 'NEMA_IQ_01_08_Std_in_background_vs_sphere_size.pickle')
     answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here:\n{save_path}\nas:\n{png_path}?")
     if answer: 
         # Save the plot as PNG, PDF, and pickle files        
@@ -911,7 +937,7 @@ def plot_std_values(std_values):
 
     plt.show()
 
-def get_ir_value(masks):
+def get_ir_value(masks, sphere_sizes):
     """
     Calculate the image roughness within the mask (i.e. one sphere) for all recons
     Followed fromula (3) of http://dx.doi.org/10.1088/0031-9155/55/5/013
@@ -981,7 +1007,9 @@ def get_ir_value(masks):
         [20131.80, 25170.27, 26933.20, 26933.20, 29963.80, 31056.60] #SUV_N_08
     ]
     '''
-    
+    # Decide if SUV_N or SUV_mean should be used for IR calculation
+    flag_use_suv_n = False
+
     ir_values_per_recon = []
     # Iterate through each mask (each corresponding to a different sphere size)
     for mask_index, mask in enumerate(masks):
@@ -993,8 +1021,14 @@ def get_ir_value(masks):
 
         # Calculate image roughness in this specific reconstruction (iteration_count)
         #for suv_n_value in SUV_N[iteration_count]:
-        temp_value = np.sum((pixel_values - SUV_N[iteration_count][mask_index]) ** 2)
-        ir = (np.sqrt(temp_value / (np.sum(mask) - 1)) / SUV_N[iteration_count][mask_index])
+        if flag_use_suv_n:
+            temp_value = np.sum((pixel_values - SUV_N[iteration_count][mask_index]) ** 2)
+            ir = (np.sqrt(temp_value / (np.sum(mask) - 1)) / SUV_N[iteration_count][mask_index])
+        else:
+            # Calculate the mean of the pixel values within the mask
+            mean_value = np.mean(pixel_values)
+            temp_value = np.sum((pixel_values - mean_value) ** 2)
+            ir = (np.sqrt(temp_value / (np.sum(mask) - 1)) / mean_value)
         ir_values.append(ir)
         
         ir_values_per_recon.append(ir_values)
@@ -1018,14 +1052,14 @@ def get_ir_value(masks):
 
         ir_values_per_sphere.append(ir_values)
     print(f"IR values shape: {np.array(ir_values_per_recon).shape}")
-    plot_ir_values(ir_values_per_recon)
+    plot_ir_values(ir_values_per_recon, sphere_sizes)
 
-def plot_ir_values(ir_values):
+def plot_ir_values(ir_values, sphere_sizes):
     global iteration_count
     
-    legend_entries = ['2i, Absolute Scattering', '2i, Relative Scattering', '3i, Absolute Scattering', '3i, Relative Scattering', '4i, Absolute Scattering', '4i, Relative Scattering']
-    #legend_entries = ['1 iteration', '2 iterations', '3 iterations', '4 iterations', '5 iterations', '6 iterations', '7 iterations', '8 iterations']
-    legend_entries = ['2i, Gauss 3x3', '2i, Gauss 5x5', '2i, Gauss 7x7', '3i, Gauss 3x3', '3i, Gauss 5x5', '3i, Gauss 7x7', '4i, Gauss 3x3', '4i, Gauss 5x5', '4i, Gauss 7x7']
+    #legend_entries = ['2i, Absolute Scattering', '2i, Relative Scattering', '3i, Absolute Scattering', '3i, Relative Scattering', '4i, Absolute Scattering', '4i, Relative Scattering']
+    legend_entries = ['1 iteration', '2 iterations', '3 iterations', '4 iterations', '5 iterations', '6 iterations', '7 iterations', '8 iterations']
+    #legend_entries = ['2i, Gauss 3x3', '2i, Gauss 5x5', '2i, Gauss 7x7', '3i, Gauss 3x3', '3i, Gauss 5x5', '3i, Gauss 7x7', '4i, Gauss 3x3', '4i, Gauss 5x5', '4i, Gauss 7x7']
     # Define line styles
     #line_styles = ['-', '--', '-.', '-', '--', '-.', '-', '--', '-.']
     line_styles = ['-', '--', '-', '--', '-', '--']
@@ -1037,15 +1071,15 @@ def plot_ir_values(ir_values):
     # Increment the iteration counter for the legend of the plot
     iteration_count += 1
     
-    sphere_sizes = [10, 13, 17, 22, 28, 37]
+    #sphere_sizes = [10, 13, 17, 22, 28, 37]
     
-    plt.figure(f'Image Roughness vs Sphere Size')
-    plt.plot(sphere_sizes, ir_values, marker='o', linestyle=line_styles[iteration_count - 1], color=colors[iteration_count - 1])
-    plt.xlabel('Sphere Sizes [mm]')
+    plt.figure(f'Image Roughness in Background vs VOI Size')
+    plt.plot(sphere_sizes, ir_values, marker='o')#, linestyle=line_styles[iteration_count - 1], color=colors[iteration_count - 1])
+    plt.xlabel('Sperical VOI Diameter [mm]')
     plt.ylabel('Image Roughness [%]')
-    plt.title('Image Roughness vs Sphere Size')
-    plt.legend(legend_entries[0:iteration_count], title=f'Number of iterations i: ')
-    plt.ylim(0, 0.6)
+    plt.title('Image Roughness in Background vs VOI Size')
+    plt.legend(legend_entries[0:iteration_count])#, title=f'Number of iterations i: ')
+    plt.ylim(0, 0.1)
     plt.grid(True)
     plt.xticks(sphere_sizes)
     #plt.legend(recon_names, title=f'Number of iterations: ')
@@ -1055,9 +1089,9 @@ def plot_ir_values(ir_values):
     plt.show(block=False)
 
     save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Image Roughness"
-    png_path = os.path.join(save_path, 'NEMA_IQ_02_04_c_image_roughness_within_the_spheres_calculated_with_SUV_N_40_vs_sphere_size.png')
-    pdf_path = os.path.join(save_path, 'NEMA_IQ_02_04_c_image_roughness_within_the_spheres_calculated_with_SUV_N_40_vs_sphere_size.pdf')
-    pickle_path = os.path.join(save_path, 'NEMA_IQ_02_04_c_image_roughness_within_the_spheres_calculated_with_SUV_N_40_vs_sphere_size.pickle')
+    png_path = os.path.join(save_path, 'NEMA_IQ_01_08_image_roughness_background_calculated_with_SUV_mean_vs_sphere_size.png')
+    pdf_path = os.path.join(save_path, 'NEMA_IQ_01_08_image_roughness_background_calculated_with_SUV_mean_vs_sphere_size.pdf')
+    pickle_path = os.path.join(save_path, 'NEMA_IQ_01_08_image_roughness_background_calculated_with_SUV_mean_vs_sphere_size.pickle')
         
     answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here:\n{save_path}\nas\n{png_path}?")
     if answer: 
@@ -1166,6 +1200,47 @@ def plot_line_profiles(image_stack, centers):
             pickle.dump(fig, f)
 
     plt.show()
+
+def create_cylindrical_mask(center, radius_pixels, height_pixels, shape):
+    """
+    Create a 3D cylindrical mask.
+    
+    Parameters:
+    center: tuple (z_center, y_center, x_center) 
+        - Center of the cylinder in the 3D image (z, y, x coordinates).
+    radius_pixels: int
+        - Radius of the cylinder in pixels.
+    height_pixels: int
+        - Number of slices the cylinder covers in the z direction.
+    shape: tuple (depth, height, width)
+        - Shape of the 3D image stack (z, y, x dimensions).
+    
+    Returns:
+    mask: numpy.ndarray
+        - A 3D binary mask with the cylindrical region set to True.
+    """
+    z_center, y_center, x_center = center
+    depth, height, width = shape
+
+    # Create a 3D mask array initialized to False
+    mask = np.zeros(shape, dtype=bool)
+
+    # Calculate the range of z slices for the cylinder
+    z_start = max(0, int(z_center - height_pixels // 2))
+    z_end = min(depth, int(z_center + height_pixels // 2) + 1)
+
+    # Generate a grid for the y and x dimensions
+    y, x = np.ogrid[:height, :width]
+
+    # Compute the distance from the center in the yx-plane
+    distance = np.sqrt((y - y_center) ** 2 + (x - x_center) ** 2)
+    circle_mask = distance <= radius_pixels
+
+    # Apply the circle mask to the appropriate z slices
+    for z in range(z_start, z_end):
+        mask[z, :, :] = circle_mask
+
+    return mask
 
 def create_2d_spherical_mask(center, radius_pixels, shape):
     """
@@ -1296,11 +1371,11 @@ def process_rois_for_predefined_centers(roi_or_voi = 'voi'):
     # flag for the spherical RC_mean in all spheres (10 - 37 mm)
     flag_spherical_RC_mean_all_spheres = False
     # flag for the spherical RC_mean in the smallest sphere (10 mm)
-    flag_spherical_RC_mean_in_small_sphere = True # To test VOI sizes for the lesion in the prostate (within the smallest sphere, surrounded by hot background)
+    flag_spherical_RC_mean_in_small_sphere = False # To test VOI sizes for the lesion in the prostate (within the smallest sphere, surrounded by hot background)
     # flag for the cylindrical RC_mean in the smallest sphere (10 mm)
     flag_cylindrical_RC_mean_in_small_sphere = False # To test center line VOI for iliac artery
     # flag for the spherical RC_mean in the background
-    flag_spherical_RC_mean_in_background = False # To test VOI sizes for the muscle gluteus maximus (background in a PET scan)
+    flag_spherical_RC_mean_in_background = True # To test VOI sizes for the muscle gluteus maximus (background in a PET scan)
 
     # Centers of 6 2D spheres with a 344x344 image size, increasing sphere sizes
     # centers = [(200, 165), (189, 190), (160, 194), (144, 171), (154, 146), (183, 142)] 
@@ -1319,7 +1394,7 @@ def process_rois_for_predefined_centers(roi_or_voi = 'voi'):
                 # Centers of 6 3D spheres with a 512x512 image size, increasing sphere sizes, adds the current_index to the z value later on
                 centers = [(current_index, 212, 273), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]
                 sphere_sizes = [10, 13, 17, 22, 28, 37]  # in mm
-    elif flag_spherical_RC_mean_in_small_sphere:  
+    elif flag_spherical_RC_mean_in_small_sphere or flag_cylindrical_RC_mean_in_small_sphere or flag_spherical_RC_mean_in_background:  
         sphere_sizes = np.arange(1, 38, 1) # Diameter in mm
     radius = 15  # Covers even the biggest sphere with a diameter of 18.5 pixels (times approx. 2 mm pixel_spacing = 37 mm sphere)
     roi_masks = []
@@ -1337,8 +1412,10 @@ def process_rois_for_predefined_centers(roi_or_voi = 'voi'):
         #threshold = 0.4 * true_activity_concentration #local_max
         if flag_spherical_RC_mean_all_spheres:
             center = centers[i] # take the center of all spheres
-        elif flag_spherical_RC_mean_in_small_sphere:
-            center = centers[5] # always take the center of a specifc sphere
+        elif flag_spherical_RC_mean_in_small_sphere or flag_cylindrical_RC_mean_in_small_sphere:
+            center = centers[1] # always take the center of a specifc sphere
+        elif flag_spherical_RC_mean_in_background:
+            center = (current_index, 280, 180) # center of the background
 
         if flag_thresholding:
             # Create ROI/VOI by isocontouring
@@ -1360,25 +1437,36 @@ def process_rois_for_predefined_centers(roi_or_voi = 'voi'):
                 roi_mask_temp = create_isocontour_voi_3d(image_stack, center, radius, threshold)
             #print(f"VOI {len(roi_masks) + 1} - Threshold: {threshold:.2f}, Max Value: {true_activity_concentration:.2f}, Number of Pixels: {np.sum(roi_mask_temp)}")
         else:
-            # Create ROI/VOI by defining the size to be the same as the sphere size
-            if roi_or_voi == 'roi':
+            if flag_cylindrical_RC_mean_in_small_sphere == True:
+                # Create a cylindrical VOI by defining the size to be the same as the sphere size
                 radius_mm = sphere_size / 2
-                
                 # Read in the pixel size of the DICOM image
                 pixel_spacing = dicom_images[0][0x0028, 0x0030].value
+                pixel_spacing_z = dicom_images[0][0x0018, 0x0050].value
                 radius_pixels = radius_mm / pixel_spacing[0]
-                roi_mask_temp = create_2d_spherical_mask(center, radius_pixels, shape)
+                height_pixels = 5 # 10 slices in z direction # diameter_mm / pixel_spacing_z  # height of the cylinder in pixels
+                roi_mask_temp = create_cylindrical_mask(center, radius_pixels, height_pixels, shape)
             else:
-                radius_mm = sphere_size / 2
-                
-                # Read in the pixel size of the DICOM image
-                pixel_spacing = dicom_images[0][0x0028, 0x0030].value
-                radius_pixels = radius_mm / pixel_spacing[0]
-                roi_mask_temp = create_3d_spherical_mask(center, radius_pixels, shape)
-            #print(f"VOI {len(roi_masks) + 1}, Max Value: {true_activity_concentration:.2f}, Number of Pixels: {np.sum(roi_mask_temp)}")
+                # No cylindrical VOI, spherical VOIs are used here
+                # Create ROI/VOI by defining the size to be the same as the sphere size
+                if roi_or_voi == 'roi':
+                    radius_mm = sphere_size / 2
+                    
+                    # Read in the pixel size of the DICOM image
+                    pixel_spacing = dicom_images[0][0x0028, 0x0030].value
+                    radius_pixels = radius_mm / pixel_spacing[0]
+                    roi_mask_temp = create_2d_spherical_mask(center, radius_pixels, shape)
+                else:
+                    radius_mm = sphere_size / 2
+                    
+                    # Read in the pixel size of the DICOM image
+                    pixel_spacing = dicom_images[0][0x0028, 0x0030].value
+                    radius_pixels = radius_mm / pixel_spacing[0]
+                    roi_mask_temp = create_3d_spherical_mask(center, radius_pixels, shape)
+                #print(f"VOI {len(roi_masks) + 1}, Max Value: {true_activity_concentration:.2f}, Number of Pixels: {np.sum(roi_mask_temp)}")
         
         roi_masks.append(roi_mask_temp)
-        print(f"Radius in pixels: ", radius_pixels, " Radius in mm:", radius_mm)
+        #print(f"Radius in pixels: ", radius_pixels, " Radius in mm:", radius_mm)
     #print(f"roi_masks: {roi_masks}")
     
         # Create circular ROI and extract coordinate pairs to see if the radius of the max value search and the ROIs in which the max value is searched is correct
@@ -1523,7 +1611,7 @@ def plot_recovery_coefficients(recovery_coefficients=None, sphere_sizes=None):
     # Add labels and legend
     plt.xlabel('Spherical VOI Diameter [mm]')
     plt.ylabel('Recovery Coefficient [%]')
-    plt.title('Recovery Coefficients within a 37 mm Hot Sphere calculated with c$_{mean}$') #SUV$_{40}$
+    plt.title('Recovery Coefficients in background calculated with c$_{mean}$') #SUV$_{40}$
     plt.legend()
     plt.grid(True)
     plt.xticks(sphere_sizes)  # Set x-ticks to the exact sphere sizes
@@ -1533,9 +1621,9 @@ def plot_recovery_coefficients(recovery_coefficients=None, sphere_sizes=None):
     plt.show(block=False)
     iteration_count += 1
     save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Recovery Coefficients"
-    png_path = os.path.join(save_path, 'NEMA_IQ_01_08_rc_calculated_with_SUV_mean_and_spherical_VOI_within_37_mm_sphere_vs_VOI_sizes.png')
-    pdf_path = os.path.join(save_path, 'NEMA_IQ_01_08_rc_calculated_with_SUV_mean_and_spherical_VOI_within_37_mm_sphere_vs_VOI_sizes.pdf')
-    pickle_path = os.path.join(save_path, 'NEMA_IQ_01_08_rc_calculated_with_SUV_mean_and_spherical_VOI_within_37_mm_sphere_vs_VOI_sizes.pickle')
+    png_path = os.path.join(save_path, 'NEMA_IQ_01_08_rc_calculated_with_SUV_mean_and_spherical_VOI_in_background_vs_VOI_sizes.png')
+    pdf_path = os.path.join(save_path, 'NEMA_IQ_01_08_rc_calculated_with_SUV_mean_and_spherical_VOI_in_background_vs_VOI_sizes.pdf')
+    pickle_path = os.path.join(save_path, 'NEMA_IQ_01_08_rc_calculated_with_SUV_mean_and_spherical_VOI_in_background_vs_VOI_sizes.pickle')
     
     answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here:\n{save_path}\nas\n{png_path}?")
     if answer:
