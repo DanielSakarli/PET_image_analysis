@@ -26,7 +26,7 @@ def alter_pickle_plot(pickle_path, output_pickle_path):
     
     # Change the ylabel to "Image Roughness [%]"
     #ax.set_ylabel("Image Roughness [%]")
-    ax.set_ylim(0, 0.16) # Limit the y-axis
+    ax.set_ylim(0, 2000) # Limit the y-axis
     # Save the modified plot back to a pickle file
     # Edit title
     #ax.set_title("Recovery Coefficients within a 10 mm Hot Sphere calculated with c$_{mean}$")

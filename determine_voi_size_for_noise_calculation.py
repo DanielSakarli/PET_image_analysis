@@ -812,15 +812,23 @@ def noise_vs_sphere_size():
 
     # If this flag is true we use the same center for all spheres and increase the
     # sphere size continuously (1 to 38 mm)
-    flag_continuous_sphere_sizes = True
+    flag_continuous_sphere_sizes = False
+    flag_spherical_RC_mean_in_background_close_to_hot_sphere = True
+    flag_cylindrical_RC_mean_in_background_close_to_hot_sphere = False
+    # Flag that turns the spherical VOIs to cylindrical VOIs (centerline approach for iliac artery)
+    flag_cylindrical_VOI = False
     # Center of smallest 3D sphere with a 512x512 image size
     #center = (0, 209, 270) # for the z value, the method create_3d_spherical_mask is adjusted to add the current_index (i.e. the slice number)
     #center = (0, 242, 298) # biggest sphere center position
     # Centers of 6 3D spheres with a 512x512 image size, increasing sphere sizes. For the first NEMA IQ scan from the 10.10.2024
     #centers = [(0, 212, 272), (0, 217, 228), (0, 257, 214), (0, 287, 242), (0, 280, 282), (0, 242, 298)]
     # Centers of 6 3D spheres with a 512x512 image size, increasing sphere sizes. For the second NEMA IQ scan from the 05.11.2024
-    if flag_continuous_sphere_sizes:
-        centers = [(current_index, 280, 180)]
+    if flag_continuous_sphere_sizes or flag_cylindrical_VOI:
+        #centers = [(current_index, 280, 180)] # center in background
+        #centers = [(current_index, 212, 273)] # center of smallest sphere for second NEMA scan November 2024
+        centers = [(current_index, 210, 271)] # center of smallest sphere with first NEMA scan 10.10.2024
+    elif flag_spherical_RC_mean_in_background_close_to_hot_sphere or flag_cylindrical_RC_mean_in_background_close_to_hot_sphere:
+        centers = [(current_index, 212, 265)]
     else:
         centers = [(current_index, 212, 273), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]
     
@@ -832,7 +840,7 @@ def noise_vs_sphere_size():
     # VOI radius in pixels for plot_mean_vs_sphere_size()
     #voi_sizes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13] # intentionally goes over the borders of the actual sphere size to see how the noise and mean behave over the sphere size border
     
-    if flag_continuous_sphere_sizes:
+    if flag_continuous_sphere_sizes or flag_cylindrical_VOI or flag_spherical_RC_mean_in_background_close_to_hot_sphere or flag_cylindrical_RC_mean_in_background_close_to_hot_sphere:
         sphere_sizes = np.arange(1, 38, 1) # in mm
     else:
         sphere_sizes = [10, 13, 17, 22, 28, 37]  # in mm
@@ -842,15 +850,20 @@ def noise_vs_sphere_size():
     
     for i, sphere_size  in enumerate(sphere_sizes):
     #for center, sphere_radius in zip(centers, sphere_sizes):
-        if flag_continuous_sphere_sizes:
-            center = centers[0]
+        if flag_continuous_sphere_sizes or flag_cylindrical_VOI or flag_spherical_RC_mean_in_background_close_to_hot_sphere or flag_cylindrical_RC_mean_in_background_close_to_hot_sphere:
+            center = centers[0] # Center of the smallest sphere (10 mm)
         else:
             center = centers[i]
         radius_mm = sphere_size / 2
         # Read in the pixel size of the DICOM image
         pixel_spacing = dicom_images[0][0x0028, 0x0030].value
         radius_pixels = radius_mm / pixel_spacing[0]
-        mask = create_3d_spherical_mask(center, radius_pixels, shape)
+        
+        if flag_cylindrical_VOI or flag_cylindrical_RC_mean_in_background_close_to_hot_sphere:
+            height_pixels = 5 # 5 slices in z-direction, approx. equalling 10 mm
+            mask = create_cylindrical_mask(center, radius_pixels, height_pixels, shape)
+        else:
+            mask = create_3d_spherical_mask(center, radius_pixels, shape)
         masks.append(mask)
     
     roi_masks = masks # Save the 3D masks in global roi_masks to display them later on
@@ -861,12 +874,12 @@ def noise_vs_sphere_size():
     print(f"IR values: {ir_values}")
     
     #ture_activity_concentration = 28136.08 # calculated the activity with the measured injected_activity and the decay constant of F-18 (in Bq)
-    ture_activity_concentration = 26166.28 # [Bq/mL]. Scan from the 05.11.2024, scan start: 11:36:57 am
+    true_activity_concentration = 26166.28 # [Bq/mL]. Scan from the 05.11.2024, scan start: 11:36:57 am
 
     # take the true activtiy concentration as the average of the activity concentration at the start and end of the scan
     # reason: can't decay-correct as usual since it is a static image and not a dynamic one
     #true_activity_conc = ((activity_conc_at_scan_start - activity_conc_at_scan_end) / 2) + activity_conc_at_scan_end
-    print(f"True activity concentration: {ture_activity_concentration:.2f} Bq/mL")
+    print(f"True activity concentration: {true_activity_concentration:.2f} Bq/mL")
     plt.show()
 
 
@@ -912,8 +925,8 @@ def plot_std_values(std_values, sphere_sizes):
     plt.plot(sphere_sizes, std_values, marker='o')#, linestyle=line_styles[iteration_count - 1], color=colors[iteration_count - 1])
     plt.xlabel('Spherical VOI Diameter [mm]')
     plt.ylabel('Standard Deviation [Bq/mL]')
-    plt.title('Standard Deviation in Background vs VOI Size')
-    plt.ylim(0, 500)
+    plt.title('Standard Deviation in Hot Background close to a 10 mm Hot Sphere vs VOI Size')
+    plt.ylim(0, 7000)
     # iteration_count += 1 Do not increment here, because we do calculation of ir before std calculation and there iteration_count is incremented
     plt.legend(legend_entries[0:iteration_count])#, title=f'Number of iterations i: ')
     plt.grid(True)
@@ -924,9 +937,9 @@ def plot_std_values(std_values, sphere_sizes):
     plt.show(block=False)
 
     save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Standard Deviation"
-    png_path = os.path.join(save_path,    'NEMA_IQ_01_08_Std_in_background_vs_sphere_size.png')
-    pdf_path = os.path.join(save_path,    'NEMA_IQ_01_08_Std_in_background_vs_sphere_size.pdf')
-    pickle_path = os.path.join(save_path, 'NEMA_IQ_01_08_Std_in_background_vs_sphere_size.pickle')
+    png_path = os.path.join(save_path,    'NEMA_IQ_01_08_Std_with_spherical_VOI_in_background_close_to_10mm_sphere_vs_sphere_size.png')
+    pdf_path = os.path.join(save_path,    'NEMA_IQ_01_08_Std_with_spherical_VOI_in_background_close_to_10mm_sphere_vs_sphere_size.pdf')
+    pickle_path = os.path.join(save_path, 'NEMA_IQ_01_08_Std_with_spherical_VOI_in_background_close_to_10mm_sphere_vs_sphere_size.pickle')
     answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here:\n{save_path}\nas:\n{png_path}?")
     if answer: 
         # Save the plot as PNG, PDF, and pickle files        
@@ -1075,11 +1088,11 @@ def plot_ir_values(ir_values, sphere_sizes):
     
     plt.figure(f'Image Roughness in Background vs VOI Size')
     plt.plot(sphere_sizes, ir_values, marker='o')#, linestyle=line_styles[iteration_count - 1], color=colors[iteration_count - 1])
-    plt.xlabel('Sperical VOI Diameter [mm]')
+    plt.xlabel('Spherical VOI Diameter [mm]')
     plt.ylabel('Image Roughness [%]')
-    plt.title('Image Roughness in Background vs VOI Size')
+    plt.title('Image Roughness in Hot Background close to a 10 mm Hot Sphere vs VOI Size')
     plt.legend(legend_entries[0:iteration_count])#, title=f'Number of iterations i: ')
-    plt.ylim(0, 0.1)
+    plt.ylim(0, 1)
     plt.grid(True)
     plt.xticks(sphere_sizes)
     #plt.legend(recon_names, title=f'Number of iterations: ')
@@ -1089,9 +1102,9 @@ def plot_ir_values(ir_values, sphere_sizes):
     plt.show(block=False)
 
     save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Image Roughness"
-    png_path = os.path.join(save_path, 'NEMA_IQ_01_08_image_roughness_background_calculated_with_SUV_mean_vs_sphere_size.png')
-    pdf_path = os.path.join(save_path, 'NEMA_IQ_01_08_image_roughness_background_calculated_with_SUV_mean_vs_sphere_size.pdf')
-    pickle_path = os.path.join(save_path, 'NEMA_IQ_01_08_image_roughness_background_calculated_with_SUV_mean_vs_sphere_size.pickle')
+    png_path = os.path.join(save_path, 'NEMA_IQ_01_08_Image_Roughness_with_spherical_VOI_in_background_close_to_10mm_sphere_vs_sphere_size.png')
+    pdf_path = os.path.join(save_path, 'NEMA_IQ_01_08_Image_Roughness_with_spherical_VOI_in_background_close_to_10mm_sphere_vs_sphere_size.pdf')
+    pickle_path = os.path.join(save_path, 'NEMA_IQ_01_08_Image_Roughness_with_spherical_VOI_in_background_close_to_10mm_sphere_vs_sphere_size.pickle')
         
     answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here:\n{save_path}\nas\n{png_path}?")
     if answer: 
@@ -1375,12 +1388,21 @@ def process_rois_for_predefined_centers(roi_or_voi = 'voi'):
     # flag for the cylindrical RC_mean in the smallest sphere (10 mm)
     flag_cylindrical_RC_mean_in_small_sphere = False # To test center line VOI for iliac artery
     # flag for the spherical RC_mean in the background
-    flag_spherical_RC_mean_in_background = True # To test VOI sizes for the muscle gluteus maximus (background in a PET scan)
+    flag_spherical_RC_mean_in_background = False # To test VOI sizes for the muscle gluteus maximus (background in a PET scan)
+    # flag for the cylindrical RC_mean in background but close to hot sphere
+    flag_cylindrical_RC_mean_in_background_close_to_hot_sphere = False # To test center line VOI for the muscle gluteus maximus (background in a PET scan)
+    # flag for the spherical RC_mean in the background but close to hot sphere
+    flag_spherical_RC_mean_in_background_close_to_hot_sphere = True # To test VOI sizes for the muscle gluteus maximus (background in a PET scan)
 
     # Centers of 6 2D spheres with a 344x344 image size, increasing sphere sizes
     # centers = [(200, 165), (189, 190), (160, 194), (144, 171), (154, 146), (183, 142)] 
+    # Centers for second scan in November
     centers = [(current_index, 212, 273), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]
-                
+    # Centers for first scan in October
+    #centers = [(current_index, 210, 271), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]            
+    if flag_cylindrical_RC_mean_in_background_close_to_hot_sphere or flag_spherical_RC_mean_in_background_close_to_hot_sphere:
+        centers = [(current_index, 212, 265)]
+
     if flag_spherical_RC_mean_all_spheres:
         sphere_sizes = [10, 13, 17, 22, 28, 37]  # Diameter in mm
         if False:
@@ -1394,9 +1416,9 @@ def process_rois_for_predefined_centers(roi_or_voi = 'voi'):
                 # Centers of 6 3D spheres with a 512x512 image size, increasing sphere sizes, adds the current_index to the z value later on
                 centers = [(current_index, 212, 273), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]
                 sphere_sizes = [10, 13, 17, 22, 28, 37]  # in mm
-    elif flag_spherical_RC_mean_in_small_sphere or flag_cylindrical_RC_mean_in_small_sphere or flag_spherical_RC_mean_in_background:  
+    else:
         sphere_sizes = np.arange(1, 38, 1) # Diameter in mm
-    radius = 15  # Covers even the biggest sphere with a diameter of 18.5 pixels (times approx. 2 mm pixel_spacing = 37 mm sphere)
+    radius = 15  # For isocontouring. Covers even the biggest sphere with a diameter of 18.5 pixels (times approx. 2 mm pixel_spacing = 37 mm sphere)
     roi_masks = []
     # roi_pixels = []  # Initialize roi_pixels as an empty list
     
@@ -1412,8 +1434,8 @@ def process_rois_for_predefined_centers(roi_or_voi = 'voi'):
         #threshold = 0.4 * true_activity_concentration #local_max
         if flag_spherical_RC_mean_all_spheres:
             center = centers[i] # take the center of all spheres
-        elif flag_spherical_RC_mean_in_small_sphere or flag_cylindrical_RC_mean_in_small_sphere:
-            center = centers[1] # always take the center of a specifc sphere
+        elif flag_spherical_RC_mean_in_small_sphere or flag_cylindrical_RC_mean_in_small_sphere or flag_cylindrical_RC_mean_in_background_close_to_hot_sphere or flag_spherical_RC_mean_in_background_close_to_hot_sphere:
+            center = centers[0] # always take the center of a specifc sphere
         elif flag_spherical_RC_mean_in_background:
             center = (current_index, 280, 180) # center of the background
 
@@ -1437,7 +1459,7 @@ def process_rois_for_predefined_centers(roi_or_voi = 'voi'):
                 roi_mask_temp = create_isocontour_voi_3d(image_stack, center, radius, threshold)
             #print(f"VOI {len(roi_masks) + 1} - Threshold: {threshold:.2f}, Max Value: {true_activity_concentration:.2f}, Number of Pixels: {np.sum(roi_mask_temp)}")
         else:
-            if flag_cylindrical_RC_mean_in_small_sphere == True:
+            if flag_cylindrical_RC_mean_in_small_sphere == True or flag_cylindrical_RC_mean_in_background_close_to_hot_sphere == True:
                 # Create a cylindrical VOI by defining the size to be the same as the sphere size
                 radius_mm = sphere_size / 2
                 # Read in the pixel size of the DICOM image
@@ -1446,6 +1468,7 @@ def process_rois_for_predefined_centers(roi_or_voi = 'voi'):
                 radius_pixels = radius_mm / pixel_spacing[0]
                 height_pixels = 5 # 10 slices in z direction # diameter_mm / pixel_spacing_z  # height of the cylinder in pixels
                 roi_mask_temp = create_cylindrical_mask(center, radius_pixels, height_pixels, shape)
+                print("Created cylindrical VOI")
             else:
                 # No cylindrical VOI, spherical VOIs are used here
                 # Create ROI/VOI by defining the size to be the same as the sphere size
@@ -1464,32 +1487,14 @@ def process_rois_for_predefined_centers(roi_or_voi = 'voi'):
                     radius_pixels = radius_mm / pixel_spacing[0]
                     roi_mask_temp = create_3d_spherical_mask(center, radius_pixels, shape)
                 #print(f"VOI {len(roi_masks) + 1}, Max Value: {true_activity_concentration:.2f}, Number of Pixels: {np.sum(roi_mask_temp)}")
-        
+                print("Created spherical VOI")
+            print(f"Number of voxels in VOI: {np.sum(roi_mask_temp)}")
         roi_masks.append(roi_mask_temp)
         #print(f"Radius in pixels: ", radius_pixels, " Radius in mm:", radius_mm)
     #print(f"roi_masks: {roi_masks}")
     
-        # Create circular ROI and extract coordinate pairs to see if the radius of the max value search and the ROIs in which the max value is searched is correct
-        #rr, cc = np.ogrid[:selected_slice.shape[0], :selected_slice.shape[1]]
-        #circle_mask = (rr - center[0])**2 + (cc - center[1])**2 <= radius**2
-        #roi_coords = np.column_stack(np.where(circle_mask))
-        #roi_pixels.append(roi_coords)
     display_dicom_image(selected_slice, canvas, ax)
-    #display_dicom_image(selected_slice, canvas, ax, roi_pixels=roi_pixels)
-  
-    if False:
-        for center in centers:
-            # Assuming a threshold of 40% of the max value within each sphere's bounding box
-            local_max = np.max(selected_slice[
-                max(0, center[0] - radius):min(selected_slice.shape[0], center[0] + radius),
-                max(0, center[1] - radius):min(selected_slice.shape[1], center[1] + radius)
-            ])
-            threshold = 0.4 * local_max
-            voi_mask = create_isocontour_roi(selected_slice, center, radius, threshold)
-            print(f"VOI {len(vois) + 1} - Threshold: {threshold:.2f}, Max Value: {local_max:.2f}, Number of Pixels: {np.sum(voi_mask)}")
-            vois.append(voi_mask)
-    
-        display_dicom_image(selected_slice, canvas, ax, voi_masks=vois)
+
     # Initialize an array to store the mean values of the different VOIs
     mean_values = []
     if roi_or_voi == 'voi':
@@ -1611,19 +1616,19 @@ def plot_recovery_coefficients(recovery_coefficients=None, sphere_sizes=None):
     # Add labels and legend
     plt.xlabel('Spherical VOI Diameter [mm]')
     plt.ylabel('Recovery Coefficient [%]')
-    plt.title('Recovery Coefficients in background calculated with c$_{mean}$') #SUV$_{40}$
+    plt.title('Recovery Coefficients in background close to 10 mm Hot Sphere calculated with c$_{mean}$') #SUV$_{40}$
     plt.legend()
     plt.grid(True)
     plt.xticks(sphere_sizes)  # Set x-ticks to the exact sphere sizes
-    plt.ylim(00, 120)
+    plt.ylim(0, 100)
 
     # Show the plot to the user
     plt.show(block=False)
     iteration_count += 1
     save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Recovery Coefficients"
-    png_path = os.path.join(save_path, 'NEMA_IQ_01_08_rc_calculated_with_SUV_mean_and_spherical_VOI_in_background_vs_VOI_sizes.png')
-    pdf_path = os.path.join(save_path, 'NEMA_IQ_01_08_rc_calculated_with_SUV_mean_and_spherical_VOI_in_background_vs_VOI_sizes.pdf')
-    pickle_path = os.path.join(save_path, 'NEMA_IQ_01_08_rc_calculated_with_SUV_mean_and_spherical_VOI_in_background_vs_VOI_sizes.pickle')
+    png_path = os.path.join(save_path, 'NEMA_IQ_01_08_rc_calculated_with_SUV_mean_and_spherical_VOI_in_hot_background_close_to_10mm_sphere_vs_VOI_sizes.png')
+    pdf_path = os.path.join(save_path, 'NEMA_IQ_01_08_rc_calculated_with_SUV_mean_and_spherical_VOI_in_hot_background_close_to_10mm_sphere_vs_VOI_sizes.pdf')
+    pickle_path = os.path.join(save_path, 'NEMA_IQ_01_08_rc_calculated_with_SUV_mean_and_spherical_VOI_in_hot_background_close_to_10mm_sphere_vs_VOI_sizes.pickle')
     
     answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here:\n{save_path}\nas\n{png_path}?")
     if answer:
