@@ -18,15 +18,17 @@ def alter_pickle_plot(pickle_path, output_pickle_path):
     # Get the current axes
     ax = fig.gca()
     
-    # Subtract all y-values of the plot by 100
-    #for line in ax.get_lines():
-    #    y_data = line.get_ydata()
-    #    new_y_data = y_data - 100
-    #    line.set_ydata(new_y_data)
-    
+    # Alter all y-values of the plot
+    if False:
+        for line in ax.get_lines():
+            y_data = line.get_ydata()
+            new_y_data = y_data * 26166.28 / 6300.04
+
+            line.set_ydata(new_y_data)
+        
     # Change the ylabel to "Image Roughness [%]"
     #ax.set_ylabel("Image Roughness [%]")
-    ax.set_ylim(0, 2000) # Limit the y-axis
+    #ax.set_ylim(0, 7000) # Limit the y-axis
     # Save the modified plot back to a pickle file
     # Edit title
     #ax.set_title("Recovery Coefficients within a 10 mm Hot Sphere calculated with c$_{mean}$")
