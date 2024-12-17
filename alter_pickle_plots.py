@@ -16,8 +16,37 @@ def alter_pickle_plot(pickle_path, output_pickle_path):
         fig = pickle.load(f)
     
     # Get the current axes
-    ax = fig.gca()
+    #ax = fig.gca()
+
+    # Get all the axes in the figure
+    axes = fig.axes
+    # Print the number of axes and their positions
+    print(f"Number of axes: {len(axes)}")
+    for i, ax in enumerate(axes):
+        pos = ax.get_position()
+        print(f"Axes {i}: position = {pos}")
     
+    # Define the indices of the subplots to be altered
+    subplots_to_alter = [0, 6]  # (1st row, 1st column) and (2nd row, 1st column)
+    
+    # Alter the x-values to center the maximum y-value at x = 0 for the specified subplots
+    for i, ax in enumerate(axes):
+        if i in subplots_to_alter:
+            for line in ax.get_lines():
+                x_data = line.get_xdata()
+                y_data = line.get_ydata()
+                
+                # Find the x-coordinate of the maximum y-value
+                max_y_index = y_data.argmax()
+                max_x_value = x_data[max_y_index]
+                
+                # Shift the x-data to center the maximum y-value at x = 0
+                new_x_data = x_data - max_x_value
+                line.set_xdata(new_x_data)
+    
+    
+
+
     # Alter all y-values of the plot
     if False:
         for line in ax.get_lines():

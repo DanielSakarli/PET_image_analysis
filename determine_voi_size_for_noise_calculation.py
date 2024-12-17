@@ -813,7 +813,7 @@ def noise_vs_sphere_size():
     # If this flag is true we use the same center for all spheres and increase the
     # sphere size continuously (1 to 38 mm)
     flag_continuous_sphere_sizes = False
-    flag_spherical_RC_mean_in_background_close_to_hot_sphere = True
+    flag_spherical_RC_mean_in_background_close_to_hot_sphere = False
     flag_cylindrical_RC_mean_in_background_close_to_hot_sphere = False
     # Flag that turns the spherical VOIs to cylindrical VOIs (centerline approach for iliac artery)
     flag_cylindrical_VOI = False
@@ -822,6 +822,7 @@ def noise_vs_sphere_size():
     #center = (0, 242, 298) # biggest sphere center position
     # Centers of 6 3D spheres with a 512x512 image size, increasing sphere sizes. For the first NEMA IQ scan from the 10.10.2024
     #centers = [(0, 212, 272), (0, 217, 228), (0, 257, 214), (0, 287, 242), (0, 280, 282), (0, 242, 298)]
+    
     # Centers of 6 3D spheres with a 512x512 image size, increasing sphere sizes. For the second NEMA IQ scan from the 05.11.2024
     if flag_continuous_sphere_sizes or flag_cylindrical_VOI:
         #centers = [(current_index, 280, 180)] # center in background
@@ -830,12 +831,16 @@ def noise_vs_sphere_size():
     elif flag_spherical_RC_mean_in_background_close_to_hot_sphere or flag_cylindrical_RC_mean_in_background_close_to_hot_sphere:
         centers = [(current_index, 212, 265)]
     else:
-        centers = [(current_index, 212, 273), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]
-    
+        # NEMA IQ phantom centers for second scan from the 05.11.2024
+        #centers = [(current_index, 212, 273), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]
+        
+        # NEMA IQ phantom centers for first scan from the 10.10.2024
+        centers = [(current_index, 210, 271), (current_index, 217, 228), (current_index, 256, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]
+
     # Centers of 6 3D spheres with a 344x344 image size, increasing sphere sizes
     # centers = [(0, 142, 183), (0, 146, 154), (0, 172, 144), (0, 194, 161), (0, 190, 189), (0, 165, 200)] 
     
-    #plot_line_profiles(image_stack, centers)
+    plot_line_profiles(image_stack, centers)
 
     # VOI radius in pixels for plot_mean_vs_sphere_size()
     #voi_sizes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13] # intentionally goes over the borders of the actual sphere size to see how the noise and mean behave over the sphere size border
@@ -1149,7 +1154,7 @@ def plot_line_profiles(image_stack, centers):
     pixel_spacing = dicom_images[0][0x0028, 0x0030].value
     slice_thickness = dicom_images[0][0x0018, 0x0050].value
     sphere_sizes = [10, 13, 17, 22, 28, 37]
-    mm_limit = 25 # plot ±20 mm around the center
+    mm_limit = 25 # plot ±25 mm around the center
 
     for i, center in enumerate(centers):
         z_center, y_center, x_center = center
@@ -1167,10 +1172,41 @@ def plot_line_profiles(image_stack, centers):
         y_indices = np.arange(max(0, y_center - offset_y), min(image_stack.shape[1], y_center + offset_y + 1))
         x_indices = np.arange(max(0, x_center - offset_x), min(image_stack.shape[2], x_center + offset_x + 1))
 
-        # Extract profiles
+        # Extract profiles in z, y, and x directions
         profile_z = image_stack[z_indices, y_center, x_center]
-        profile_y = image_stack[z_center, y_indices, x_center]
-        profile_x = image_stack[z_center, y_center, x_indices]
+
+        if False:
+            profile_y = image_stack[z_center, y_indices, x_center]
+            profile_x = image_stack[z_center, y_center, x_indices]
+        
+        # Extract 9 profiles around the center for y-direction
+        neighboring_profiles_y = []
+        for dz in [-1, 0, 1]:
+            for dx in [-1, 0, 1]:
+                neighbor_z = np.clip(z_center + dz, 0, image_stack.shape[0] - 1)
+                neighbor_x = np.clip(x_center + dx, 0, image_stack.shape[2] - 1)
+                profile = image_stack[neighbor_z, y_indices, neighbor_x]
+                neighboring_profiles_y.append(profile)
+
+        # Select the y-profile with the highest summed value
+        summed_values_y = [np.sum(profile) for profile in neighboring_profiles_y]
+        print(f"Selected y-profile: {np.argmax(summed_values_y)}")
+        profile_y = neighboring_profiles_y[np.argmax(summed_values_y)]
+
+        # Extract 9 profiles around the center for x-direction
+        neighboring_profiles_x = []
+        for dz in [-1, 0, 1]:
+            for dy in [-1, 0, 1]:
+                neighbor_z = np.clip(z_center + dz, 0, image_stack.shape[0] - 1)
+                neighbor_y = np.clip(y_center + dy, 0, image_stack.shape[2] - 1)
+                profile = image_stack[neighbor_z, neighbor_y, x_indices]
+                neighboring_profiles_x.append(profile)
+
+        # Select the x-profile with the highest summed value
+        summed_values_x = [np.sum(profile) for profile in neighboring_profiles_x]
+        print(f"Selected x-profile: {np.argmax(summed_values_x)}")
+        profile_x = neighboring_profiles_x[np.argmax(summed_values_x)]
+
 
         # Calculate distances in mm
         z_distances = (z_indices - z_center) * slice_thickness
@@ -1211,6 +1247,23 @@ def plot_line_profiles(image_stack, centers):
         plt.savefig(png_path)
         with open(pickle_path, 'wb') as f:
             pickle.dump(fig, f)
+
+    plt.draw()
+
+    # Show the plot to the user
+    plt.show(block=False)
+
+    save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Line Profiles"
+    png_path = os.path.join(save_path,    'NEMA_IQ_08_cold_background.png')
+    pdf_path = os.path.join(save_path,    'NEMA_IQ_08_cold_background.pdf')
+    pickle_path = os.path.join(save_path, 'NEMA_IQ_08_cold_background.pickle')
+    answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here:\n{save_path}\nas:\n{png_path}?")
+    if answer: 
+        # Save the plot as PNG, PDF, and pickle files        
+        plt.savefig(png_path)
+        plt.savefig(pdf_path)
+        with open(pickle_path, 'wb') as f:
+            pickle.dump(plt.gcf(), f)
 
     plt.show()
 
