@@ -30,7 +30,7 @@ from matplotlib.colors import Normalize
 import pickle
 import concurrent.futures
 from tqdm import tqdm
-
+from scipy.interpolate import interp1d
 
 
 # Initialize global variables
@@ -840,7 +840,7 @@ def noise_vs_sphere_size():
     # Centers of 6 3D spheres with a 344x344 image size, increasing sphere sizes
     # centers = [(0, 142, 183), (0, 146, 154), (0, 172, 144), (0, 194, 161), (0, 190, 189), (0, 165, 200)] 
     
-    plot_line_profiles(image_stack, centers)
+    get_line_profiles(image_stack, centers)
 
     # VOI radius in pixels for plot_mean_vs_sphere_size()
     #voi_sizes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13] # intentionally goes over the borders of the actual sphere size to see how the noise and mean behave over the sphere size border
@@ -1140,9 +1140,9 @@ def plot_mean_vs_sphere_size(voi_sizes, mean_values):
     iteration_count += 1
 
 
-def plot_line_profiles(image_stack, centers):
+def get_line_profiles(image_stack, centers):
     """
-    Extracts and plots line profiles through the centers of spheres in z, y, and x directions.
+    Extracts the line profiles through the centers of spheres in z, y, and x directions.
 
     Args:
     image_stack (np.array): The 3D DICOM image stack.
@@ -1150,23 +1150,20 @@ def plot_line_profiles(image_stack, centers):
     pixel_spacing (float): Pixel spacing to convert indices to mm.
     """
     global dicom_images, loaded_folder_path
-    fig, axs = plt.subplots(3, len(centers), figsize=(15, 10))
+    #fig, axs = plt.subplots(3, len(centers), figsize=(15, 10))
     pixel_spacing = dicom_images[0][0x0028, 0x0030].value
     slice_thickness = dicom_images[0][0x0018, 0x0050].value
     sphere_sizes = [10, 13, 17, 22, 28, 37]
     mm_limit = 25 # plot ±25 mm around the center
-
+    profiles = []
     # User enters two x and y values to get the line profile
     # The line profiles of the respective sphere(s) are then chosen
     # and sent to the method recovery_coefficient_correction()
 
-    for i, center in enumerate(centers):
+    for center in centers:
         z_center, y_center, x_center = center
 
-        # Add current_index (i.e. currently selected slice) to z_center
-        #z_center += current_index
-
-        # Calculate index offsets for ±25 mm
+        # Calculate index offsets for ±mm_limit
         offset_z = int(mm_limit / slice_thickness)
         offset_y = int(mm_limit / pixel_spacing[1])
         offset_x = int(mm_limit / pixel_spacing[0])
@@ -1176,84 +1173,89 @@ def plot_line_profiles(image_stack, centers):
         y_indices = np.arange(max(0, y_center - offset_y), min(image_stack.shape[1], y_center + offset_y + 1))
         x_indices = np.arange(max(0, x_center - offset_x), min(image_stack.shape[2], x_center + offset_x + 1))
 
-        # Extract profiles in z, y, and x directions
+        # Extract z-profile
         profile_z = image_stack[z_indices, y_center, x_center]
 
-        if False:
-            profile_y = image_stack[z_center, y_indices, x_center]
-            profile_x = image_stack[z_center, y_center, x_indices]
-        
-        # Extract 9 profiles around the center for y-direction
-        neighboring_profiles_y = []
-        for dz in [-1, 0, 1]:
-            for dx in [-1, 0, 1]:
-                neighbor_z = np.clip(z_center + dz, 0, image_stack.shape[0] - 1)
-                neighbor_x = np.clip(x_center + dx, 0, image_stack.shape[2] - 1)
-                profile = image_stack[neighbor_z, y_indices, neighbor_x]
-                neighboring_profiles_y.append(profile)
+        # Extract y-profile by looking which line profile around the center has the highest sum
+        # Take the eight surrounding voxels as well as the center voxel and draw a line profile through each of these voxels
+        neighboring_profiles_y = [
+            image_stack[
+                np.clip(z_center + dz, 0, image_stack.shape[0] - 1),
+                y_indices,
+                np.clip(x_center + dx, 0, image_stack.shape[2] - 1)
+            ]
+            for dz in [-1, 0, 1] for dx in [-1, 0, 1]
+        ]
+        profile_y = neighboring_profiles_y[np.argmax([np.sum(profile) for profile in neighboring_profiles_y])]
 
-        # Select the y-profile with the highest summed value
-        summed_values_y = [np.sum(profile) for profile in neighboring_profiles_y]
-        print(f"Selected y-profile: {np.argmax(summed_values_y)}")
-        profile_y = neighboring_profiles_y[np.argmax(summed_values_y)]
-
-        # Extract 9 profiles around the center for x-direction
-        neighboring_profiles_x = []
-        for dz in [-1, 0, 1]:
-            for dy in [-1, 0, 1]:
-                neighbor_z = np.clip(z_center + dz, 0, image_stack.shape[0] - 1)
-                neighbor_y = np.clip(y_center + dy, 0, image_stack.shape[2] - 1)
-                profile = image_stack[neighbor_z, neighbor_y, x_indices]
-                neighboring_profiles_x.append(profile)
-
-        # Select the x-profile with the highest summed value
-        summed_values_x = [np.sum(profile) for profile in neighboring_profiles_x]
-        print(f"Selected x-profile: {np.argmax(summed_values_x)}")
-        profile_x = neighboring_profiles_x[np.argmax(summed_values_x)]
+        # Extract x-profile by looking which line profile around the center has the highest sum
+        # Take the eight surrounding voxels as well as the center voxel and draw a line profile through each of these voxels
+        neighboring_profiles_x = [
+            image_stack[
+                np.clip(z_center + dz, 0, image_stack.shape[0] - 1),
+                np.clip(y_center + dy, 0, image_stack.shape[1] - 1),
+                x_indices
+            ]
+            for dz in [-1, 0, 1] for dy in [-1, 0, 1]
+        ]
+        profile_x = neighboring_profiles_x[np.argmax([np.sum(profile) for profile in neighboring_profiles_x])]
 
         # Calculate distances in mm
         z_distances = (z_indices - z_center) * slice_thickness
         y_distances = (y_indices - y_center) * pixel_spacing[1]
         x_distances = (x_indices - x_center) * pixel_spacing[0]
 
-        recovery_coefficient_correction(profile_x, profile_y, profile_z, x_distances, y_distances, z_distances)
+        profiles.append({
+            "profile_x": profile_x,
+            "profile_y": profile_y,
+            "profile_z": profile_z,
+            "x_distances": x_distances,
+            "y_distances": y_distances,
+            "z_distances": z_distances
+        })
 
-        # Plotting
-        axs[0, i].plot(x_distances, profile_x)
+    plot_line_profiles(profiles, sphere_sizes)
+
+    handle_recovery_coefficient_correction(profiles)
+    
+    return profiles
+
+def plot_line_profiles(profiles, sphere_sizes):
+    """
+    Plots the x, y, and z profiles for all centers.
+
+    Args:
+    profiles (list): List of dictionaries containing x, y, and z profiles for each center.
+    sphere_sizes (list): List of sphere sizes corresponding to each center.
+    """
+    num_centers = len(profiles)
+    fig, axs = plt.subplots(3, num_centers, figsize=(15, 10))
+
+    for i, profile_data in enumerate(profiles):
+        # Plot X Profile
+        axs[0, i].plot(profile_data["x_distances"], profile_data["profile_x"])
         axs[0, i].set_title(f'X Profile - {sphere_sizes[i]} mm Sphere')
         axs[0, i].set_xlabel('Distance [mm]')
         axs[0, i].set_ylabel('Signal Intensity [Bq/mL]')
-        axs[0, i].set_ylim(0, 32000)  # Limit y-axis
+        axs[0, i].set_ylim(0, 35000)
 
-        axs[1, i].plot(y_distances, profile_y)
+        # Plot Y Profile
+        axs[1, i].plot(profile_data["y_distances"], profile_data["profile_y"])
         axs[1, i].set_title(f'Y Profile - {sphere_sizes[i]} mm Sphere')
         axs[1, i].set_xlabel('Distance [mm]')
         axs[1, i].set_ylabel('Signal Intensity [Bq/mL]')
-        axs[1, i].set_ylim(0, 32000)
+        axs[1, i].set_ylim(0, 35000)
 
-        axs[2, i].plot(z_distances, profile_z)
+        # Plot Z Profile
+        axs[2, i].plot(profile_data["z_distances"], profile_data["profile_z"])
         axs[2, i].set_title(f'Z Profile - {sphere_sizes[i]} mm Sphere')
         axs[2, i].set_xlabel('Distance [mm]')
         axs[2, i].set_ylabel('Signal Intensity [Bq/mL]')
-        axs[2, i].set_ylim(0, 32000)
-        
+        axs[2, i].set_ylim(0, 35000)
+
     plt.tight_layout()
-    # Toggle full screen mode
-    #manager = plt.get_current_fig_manager()
-    #manager.full_screen_toggle()
-    if False:
-        # Save the plot as PDF, PNG, and pickle file in the parent directory of loaded_folder_path
-        parent_directory = os.path.dirname(loaded_folder_path)
-        pdf_path = os.path.join(parent_directory, 'signal_intensity_line_profiles.pdf')
-        png_path = os.path.join(parent_directory, 'signal_intensity_line_profiles.png')
-        pickle_path = os.path.join(parent_directory, 'signal_intensity_line_profiles.pickle')
-
-        plt.savefig(pdf_path)
-        plt.savefig(png_path)
-        with open(pickle_path, 'wb') as f:
-            pickle.dump(fig, f)
-
-    plt.draw()
+    
+    #plt.draw()
 
     # Show the plot to the user
     plt.show(block=False)
@@ -1272,25 +1274,166 @@ def plot_line_profiles(image_stack, centers):
 
     plt.show()
 
-def recovery_coefficient_correction(profile_x, profile_y, profile_z, x_distances, y_distances, z_distances, x_artery, y_artery, z_artery):
+def handle_recovery_coefficient_correction(profiles):
+
+    # Get the artery dimensioms in x, y, and z direction
+    x_artery = 11
+    y_artery = 14
+    z_artery = 2
+
+    # Choose the corresponding line profile depending on artery size
+    if x_artery < 12:
+        profile_x = profiles[0]["profile_x"]    # Choose the line profile of the smallest sphere
+    elif x_artery < 15:
+        profile_x = profiles[1]["profile_x"]    # Choose the line profile of the second smallest sphere
+    elif x_artery < 19:
+        profile_x = profiles[2]["profile_x"]    # Choose the line profile of the third smallest sphere
+    # The x value will not be bigger than 19 mm
+
+    if y_artery < 12:
+        profile_y = profiles[0]["profile_y"]    # Choose the line profile of the smallest sphere
+    elif y_artery < 15:
+        profile_y = profiles[1]["profile_y"]
+    elif y_artery < 19:
+        profile_y = profiles[2]["profile_y"]
+    elif y_artery < 24:
+        profile_y = profiles[3]["profile_y"]
+    # The y value will not be bigger than 24 mm
+    
+    # The z value corresponds to the slice thickness, because the surrounding in z direction of the artery is always of the same hottnes
+    # Therefore, we choose the biggest sphere size and pretend that we only have the artery z-size == 2 mm (slice thickness), because
+    # then we get the best approximation of the artery profile
+    profile_z = profiles[3]["profile_z"]    # Choose the line profile of the 22 mm sphere
+
+    # Calculate the recovery coefficient for this specific artery shape
+    #recovery_coefficient_correction_method_1(profile_x, profile_y, profile_z, x_artery, y_artery, z_artery)
+    recovery_coefficient_correction_method_2(profile_x, profile_y, profile_z, x_artery, y_artery, z_artery)
+
+def recovery_coefficient_correction_method_1(profile_x, profile_y, profile_z, x_artery, y_artery, z_artery):
     """
     Apply the recovery coefficient correction to the line profiles.
     profile_x: Line profile in the x-direction.
     profile_y: Line profile in the y-direction.
     profile_z: Line profile in the z-direction.
-    x_distances: Distances in the x-direction.
-    y_distances: Distances in the y-direction.
-    z_distances: Distances in the z-direction.
+    x_artery: mm size of the artery in x-direction.
+    y_artery: mm size of the artery in y-direction.
+    z_artery: mm size of the artery in z-direction.
     """
     
     # Combine the 1D profiles into 2D and 3D profiles
     profile_2d = combine_2d_profile(profile_x, profile_y)
     profile_3d = combine_3d_profile(profile_x, profile_y, profile_z)
 
+    # Plot the 2D profile
+    plt.figure("2D Profile")
+    plt.imshow(profile_2d, cmap='hot', aspect='auto')
+    plt.title("2D Profile")
+    plt.xlabel("X")
+    plt.ylabel("Y")
+    plt.colorbar()
+    plt.show()
+
+    print(f"Shape of the 2d profile: {profile_2d.shape}")
+    print(f"Shape of the 3d profile: {profile_3d.shape}")
+
     # Create a ROI/VOI mask with the x, y, and z values of the artery
-    artery_mask_2d = create_2d_spherical_mask((y_artery, x_artery), 2, profile_2d.shape)
-    artery_mask_3d = create_3d_spherical_mask((z_artery, y_artery, x_artery), 2, profile_3d.shape)
+    artery_mask_2d = create_2d_oval_mask((y_artery, x_artery), profile_2d.shape)
+    artery_mask_3d = create_3d_oval_mask((z_artery, y_artery, x_artery), profile_3d.shape)
     
+    # Apply the artery mask to the 2D and 3D profiles
+    profile_2d_artery = profile_2d[artery_mask_2d]
+    profile_3d_artery = profile_3d[artery_mask_3d]
+
+    # Get the mean value of the artery profiles
+    mean_2d_artery = np.mean(profile_2d_artery)
+    mean_3d_artery = np.mean(profile_3d_artery)
+
+    # Define the true_activity_concentration
+    true_activity_concentration = 26166.28  # Activity concentration at scan start for the first NEMA IQ scan from the 10.10.2024 [Bq/mL]
+
+    # Calculate the recovery coefficients
+    recovery_coefficient_2d = mean_2d_artery / true_activity_concentration
+    recovery_coefficient_3d = mean_3d_artery / true_activity_concentration
+
+    print(f"Recovery coefficient 2D: {recovery_coefficient_2d:.2f}")
+    print(f"Recovery coefficient 3D: {recovery_coefficient_3d:.2f}")
+
+def recovery_coefficient_correction_method_2(profile_x, profile_y, profile_z, x_artery, y_artery, z_artery):
+    """
+    Apply the recovery coefficient correction to the line profiles.
+    profile_x: Line profile in the x-direction.
+    profile_y: Line profile in the y-direction.
+    profile_z: Line profile in the z-direction.
+    x_artery: mm size of the artery in x-direction.
+    y_artery: mm size of the artery in y-direction.
+    z_artery: mm size of the artery in z-direction.
+    """
+    
+    # Interpolate the x, y, and z profiles to have better rc curve resolution.
+    # Before interpolation we only have 35 data points (amount of voxels in the line profile)
+    profile_x = interpolate_lineprofile_cubic(profile_x, num_points=400)
+    profile_y = interpolate_lineprofile_cubic(profile_y, num_points=400)
+    profile_z = interpolate_lineprofile_cubic(profile_z, num_points=400)
+
+    # Create a 1D masks for the artery
+    artery_mask_x = create_1d_mask(x_artery, profile_x.shape)
+    artery_mask_y = create_1d_mask(y_artery, profile_y.shape)
+    artery_mask_z = create_1d_mask(z_artery, profile_z.shape)
+                                   
+    # Apply the artery mask to the 1D profiles
+    profile_x_artery = profile_x[artery_mask_x]
+    print(f"Profile x artery: {profile_x_artery}")
+    profile_y_artery = profile_y[artery_mask_y]
+    profile_z_artery = profile_z[artery_mask_z]
+
+    # Get the mean value of the artery profiles
+    mean_x_artery = np.mean(profile_x_artery)
+    mean_y_artery = np.mean(profile_y_artery)
+    mean_z_artery = np.mean(profile_z_artery)
+
+    # Define the true_activity_concentration
+    true_activity_concentration = 26166.28  # Activity concentration at scan start for the first NEMA IQ scan from the 10.10.2024 [Bq/mL]
+
+    # Calculate the recovery coefficients
+    recovery_coefficient_x = mean_x_artery / true_activity_concentration
+    recovery_coefficient_y = mean_y_artery / true_activity_concentration
+    recovery_coefficient_z = mean_z_artery / true_activity_concentration
+
+    print(f"Recovery coefficient x: {recovery_coefficient_x:.2f}")
+    print(f"Recovery coefficient y: {recovery_coefficient_y:.2f}")  
+    print(f"Recovery coefficient z: {recovery_coefficient_z:.2f}")
+
+def interpolate_lineprofile_cubic(profile, num_points=200):
+    """
+    Interpolates a 1D line profile to have a specified number of points using cubic spline.
+
+    Args:
+    profile (np.array): Original line profile (e.g., 35 entries).
+    num_points (int): Desired number of points after interpolation.
+
+    Returns:
+    np.array: Interpolated line profile with the specified number of points.
+    """
+    # Original x values (indices)
+    x_original = np.linspace(0, len(profile) - 1, len(profile))
+
+    # New x values (interpolated)
+    x_new = np.linspace(0, len(profile) - 1, num_points)
+
+    # Cubic interpolation
+    cubic_interpolator = interp1d(x_original, profile, kind='cubic')
+    profile_interpolated = cubic_interpolator(x_new)
+    
+    # Plot original and interpolated profiles
+    plt.plot(np.linspace(0, 34, len(profile)), profile, 'o', label='Original Profile')
+    #plt.plot(np.linspace(0, 34, 200), x_profile_interpolated, '-', label='Linear Interpolation (200 points)')
+    plt.plot(np.linspace(0, 34, num_points), profile_interpolated, '--', label='Cubic Interpolation')
+    plt.legend()
+    plt.title("Original vs Interpolated Profiles")
+    plt.xlabel("Index")
+    plt.ylabel("Value")
+    plt.show()
+    return profile_interpolated
 
 def combine_2d_profile(profile_x, profile_y):
     """
@@ -1403,6 +1546,53 @@ def create_2d_spherical_mask(center, radius_pixels, shape):
     mask = distance <= radius_pixels
     return mask
 
+def create_1d_mask(mask_size, profile_shape):
+    """
+    Creates a 1D mask centered around zero.
+
+    Args:
+    mask_size (int): Size of the mask in mm.
+    profile_shape (tuple): Size of the 1d profile in mm in which we draw the mask.
+
+    Returns:
+    np.array: A 1D boolean array representing the mask.
+    """
+    profile_length = profile_shape[0]  # Extract the integer value from the tuple
+    mask = np.zeros(profile_length, dtype=bool)
+    mask_center = profile_length // 2
+    mask_start = max(0, mask_center - mask_size // 2)
+    mask_end = min(profile_length, mask_center + mask_size // 2)
+    mask[mask_start:mask_end] = True
+    return mask
+    
+def create_2d_oval_mask(mask_shape, profile_shape):
+    """
+    Creates a 2D oval mask centered around zero.
+
+    Args:
+    mask_shape (tuple): Shape of the mask (y_size, x_size) in mm size.
+    profile_shape (tuple): Shape of the 2d profile (y_size, x_size) in mm size in which we draw the mask.
+
+    Returns:
+    np.array: A 2D boolean array representing the oval mask.
+    """
+    mask_height, mask_width = mask_shape
+    profile_height, profile_width = profile_shape
+
+    # Create coordinate grids for the profile shape
+    y = np.linspace(-profile_height / 2, profile_height / 2, profile_height)
+    x = np.linspace(-profile_width / 2, profile_width / 2, profile_width)
+    y_grid, x_grid = np.meshgrid(y, x, indexing='ij')
+
+    # Calculate the oval equation parameters
+    a = mask_width / 2  # Semi-major axis
+    b = mask_height / 2  # Semi-minor axis
+
+    # Generate the boolean mask based on the oval equation
+    mask = (x_grid / a) ** 2 + (y_grid / b) ** 2 <= 1
+    print(f"Shape of the mask: {mask.shape}")
+    return mask
+
 def create_3d_spherical_mask(center, radius_pixels, shape):
     """
     Create a 3D spherical mask.
@@ -1426,6 +1616,35 @@ def create_3d_spherical_mask(center, radius_pixels, shape):
     print(f"Shape of the mask: {mask.shape}")
     return mask
 
+def create_3d_oval_mask(mask_shape, profile_shape):
+    """
+    Creates a 3D oval mask centered within the boundaries of a given 3D profile shape.
+
+    Args:
+    mask_shape (tuple): Dimensions of the oval (z_size, y_size, x_size) in mm size.
+    profile_shape (tuple): Dimensions of the 3D profile (z_size, y_size, x_size) in which to draw the mask.
+
+    Returns:
+    np.array: A 3D boolean array representing the oval mask with the same shape as the profile.
+    """
+    mask_depth, mask_height, mask_width = mask_shape
+    profile_depth, profile_height, profile_width = profile_shape
+
+    # Create coordinate grids for the profile shape
+    z = np.linspace(-profile_depth / 2, profile_depth / 2, profile_depth)
+    y = np.linspace(-profile_height / 2, profile_height / 2, profile_height)
+    x = np.linspace(-profile_width / 2, profile_width / 2, profile_width)
+    z_grid, y_grid, x_grid = np.meshgrid(z, y, x, indexing='ij')
+
+    # Calculate the oval equation parameters
+    a = mask_width / 2   # Semi-major axis along x
+    b = mask_height / 2  # Semi-minor axis along y
+    c = mask_depth / 2   # Semi-axis along z
+
+    # Generate the boolean mask based on the 3D oval equation
+    mask = (x_grid / a) ** 2 + (y_grid / b) ** 2 + (z_grid / c) ** 2 <= 1
+
+    return mask
 
 def build_image_stack():
     global dicom_images
