@@ -809,7 +809,7 @@ def noise_vs_sphere_size():
     # Shape of the 3D image stack
     image_stack = build_image_stack()
     shape = image_stack.shape
-
+    
     # If this flag is true we use the same center for all spheres and increase the
     # sphere size continuously (1 to 38 mm)
     flag_continuous_sphere_sizes = False
@@ -1216,7 +1216,7 @@ def get_line_profiles(image_stack, centers):
 
     plot_line_profiles(profiles, sphere_sizes)
 
-    handle_recovery_coefficient_correction(profiles)
+    handle_recovery_coefficient_correction_coordinate_shift(profiles)
     
     return profiles
 
@@ -1272,32 +1272,43 @@ def plot_line_profiles(profiles, sphere_sizes):
         with open(pickle_path, 'wb') as f:
             pickle.dump(plt.gcf(), f)
 
-    plt.show()
+    plt.show(block=False)
 
-def handle_recovery_coefficient_correction(profiles):
+def handle_recovery_coefficient_correction_coordinate_shift(profiles):
+    # Named the method coordinate_shift, because I take the x and y values of the two vectors v_1 = (x_1, y_1, z_1) and v_2 = (x_2, y_2, z_2)
+    # and add x' = x_1 + x_2 and y' = y_1 + y_2 as a basis to choose the corresponding line profile (from the different sphere sizes)
+    global dicom_images
+    slice_thickness = dicom_images[0][0x0018, 0x0050].value
 
-    # Get the artery dimensioms in x, y, and z direction
-    x_artery = 11
-    y_artery = 14
-    z_artery = 2
+    # Get the artery dimensioms in x, y, and z direction for the two vectors v_1 and v_2
+    x_artery_1 = float(input("\nEnter the artery dimension in the x direction for v_1: "))
+    y_artery_1 = float(input("Enter the artery dimension in the y direction for v_1: "))
+    z_artery_1 = slice_thickness # Assume z to be equal to the slice thickness
+    x_artery_2 = float(input("Enter the artery dimension in the x direction for v_2: "))
+    y_artery_2 = float(input("Enter the artery dimension in the y direction for v_2: "))
+    z_artery_2 = slice_thickness # Assume z to be equal to the slice thickness
 
+    # Get x' and y'
+    x_prime = x_artery_1 + x_artery_2
+    y_prime = y_artery_1 + y_artery_2
+    print(f"Calculated x' = {x_prime}, and y' = {y_prime}")
     # Choose the corresponding line profile depending on artery size
-    if x_artery < 12:
-        profile_x = profiles[0]["profile_x"]    # Choose the line profile of the smallest sphere
-    elif x_artery < 15:
-        profile_x = profiles[1]["profile_x"]    # Choose the line profile of the second smallest sphere
-    elif x_artery < 19:
-        profile_x = profiles[2]["profile_x"]    # Choose the line profile of the third smallest sphere
+    if x_prime < 12:
+        profile_x = profiles[0]["profile_x"]    # Choose the line profile of the smallest sphere (10 mm diameter)
+    elif x_prime < 15:
+        profile_x = profiles[1]["profile_x"]    # Choose the line profile of the second smallest sphere (13 mm diameter)
+    elif x_prime < 19:
+        profile_x = profiles[2]["profile_x"]    # Choose the line profile of the third smallest sphere (17 mm diameter)
     # The x value will not be bigger than 19 mm
 
-    if y_artery < 12:
-        profile_y = profiles[0]["profile_y"]    # Choose the line profile of the smallest sphere
-    elif y_artery < 15:
-        profile_y = profiles[1]["profile_y"]
-    elif y_artery < 19:
-        profile_y = profiles[2]["profile_y"]
-    elif y_artery < 24:
-        profile_y = profiles[3]["profile_y"]
+    if y_prime < 12:
+        profile_y = profiles[0]["profile_y"]    # Choose the line profile of the smallest sphere (10 mm diameter)
+    elif y_prime < 15:
+        profile_y = profiles[1]["profile_y"]    # Choose the line profile of the second smallest sphere (13 mm diameter)
+    elif y_prime < 19:
+        profile_y = profiles[2]["profile_y"]    # Choose the line profile of the third smallest sphere (17 mm diameter)
+    elif y_prime < 24:
+        profile_y = profiles[3]["profile_y"]    # Choose the line profile of the fourth smallest sphere (22 mm diameter)
     # The y value will not be bigger than 24 mm
     
     # The z value corresponds to the slice thickness, because the surrounding in z direction of the artery is always of the same hottnes
@@ -1307,8 +1318,56 @@ def handle_recovery_coefficient_correction(profiles):
 
     # Calculate the recovery coefficient for this specific artery shape
     #recovery_coefficient_correction_method_1(profile_x, profile_y, profile_z, x_artery, y_artery, z_artery)
-    recovery_coefficient_correction_method_2(profile_x, profile_y, profile_z, x_artery, y_artery, z_artery)
+    recovery_coefficient_correction_method_2(profile_x, profile_y, profile_z, x_artery_1, y_artery_1, z_artery_1, x_artery_2, y_artery_2, z_artery_2)
+    
 
+def handle_recovery_coefficient_correction_full(profiles):
+    # Named the method full, because I take the full expansion of the artery in x, and y direction
+    # as the basis to choose the corresponding line profile
+
+    global dicom_images
+    slice_thickness = dicom_images[0][0x0018, 0x0050].value
+
+    # Get the artery dimensioms in x, y, and z direction for the two vectors v_1 and v_2
+    x_artery_1 = float(input("\nEnter the artery dimension in the x direction for v_1: "))
+    y_artery_1 = float(input("Enter the artery dimension in the y direction for v_1: "))
+    z_artery_1 = slice_thickness # Assume z to be equal to the slice thickness
+    x_artery_2 = float(input("Enter the artery dimension in the x direction for v_2: "))
+    y_artery_2 = float(input("Enter the artery dimension in the y direction for v_2: "))
+    z_artery_2 = slice_thickness # Assume z to be equal to the slice thickness
+
+    # Get the full expansion of the artery in x, and y direction
+    x_full_expansion = float(input("Enter the full artery expansion in the x direction: "))
+    y_full_expansion = float(input("Enter the full artery expansion in the y direction: "))
+
+    # Choose the corresponding line profile depending on artery size
+    if x_full_expansion < 12:
+        profile_x = profiles[0]["profile_x"]    # Choose the line profile of the smallest sphere (10 mm diameter)
+    elif x_full_expansion < 15:
+        profile_x = profiles[1]["profile_x"]    # Choose the line profile of the second smallest sphere (13 mm diameter)
+    elif x_full_expansion < 19:
+        profile_x = profiles[2]["profile_x"]    # Choose the line profile of the third smallest sphere (17 mm diameter)
+    # The x value will not be bigger than 19 mm
+
+    if y_full_expansion < 12:
+        profile_y = profiles[0]["profile_y"]    # Choose the line profile of the smallest sphere (10 mm diameter)
+    elif y_full_expansion < 15:
+        profile_y = profiles[1]["profile_y"]    # Choose the line profile of the second smallest sphere (13 mm diameter)
+    elif y_full_expansion < 19:
+        profile_y = profiles[2]["profile_y"]    # Choose the line profile of the third smallest sphere (17 mm diameter)
+    elif y_full_expansion < 24:
+        profile_y = profiles[3]["profile_y"]    # Choose the line profile of the fourth smallest sphere (22 mm diameter)
+    # The y value will not be bigger than 24 mm
+    
+    # The z value corresponds to the slice thickness, because the surrounding in z direction of the artery is always of the same hottnes
+    # Therefore, we choose the biggest sphere size and pretend that we only have the artery z-size == 2 mm (slice thickness), because
+    # then we get the best approximation of the artery profile
+    profile_z = profiles[3]["profile_z"]    # Choose the line profile of the 22 mm sphere
+
+    # Calculate the recovery coefficient for this specific artery shape
+    #recovery_coefficient_correction_method_1(profile_x, profile_y, profile_z, x_artery, y_artery, z_artery)
+    recovery_coefficient_correction_method_2(profile_x, profile_y, profile_z, x_artery_1, y_artery_1, z_artery_1, x_artery_2, y_artery_2, z_artery_2)
+    
 def recovery_coefficient_correction_method_1(profile_x, profile_y, profile_z, x_artery, y_artery, z_artery):
     """
     Apply the recovery coefficient correction to the line profiles.
@@ -1358,17 +1417,22 @@ def recovery_coefficient_correction_method_1(profile_x, profile_y, profile_z, x_
     print(f"Recovery coefficient 2D: {recovery_coefficient_2d:.2f}")
     print(f"Recovery coefficient 3D: {recovery_coefficient_3d:.2f}")
 
-def recovery_coefficient_correction_method_2(profile_x, profile_y, profile_z, x_artery, y_artery, z_artery):
+def recovery_coefficient_correction_method_2(profile_x, profile_y, profile_z, x_artery_1, y_artery_1, z_artery_1, x_artery_2, y_artery_2, z_artery_2):
     """
     Apply the recovery coefficient correction to the line profiles.
     profile_x: Line profile in the x-direction.
     profile_y: Line profile in the y-direction.
     profile_z: Line profile in the z-direction.
-    x_artery: mm size of the artery in x-direction.
-    y_artery: mm size of the artery in y-direction.
-    z_artery: mm size of the artery in z-direction.
+    x_artery_1: mm size of the artery in x-direction for vector v_1.
+    y_artery_1: mm size of the artery in y-direction for vector v_1.
+    z_artery_1: mm size of the artery in z-direction for vector v_1.
+    x_artery_2: mm size of the artery in x-direction for vector v_2.
+    y_artery_2: mm size of the artery in y-direction for vector v_2.
+    z_artery_2: mm size of the artery in z-direction for vector v_2.
     """
-    
+    global dicom_images
+    slice_thickness = dicom_images[0][0x0018, 0x0050].value
+
     # Interpolate the x, y, and z profiles to have better rc curve resolution.
     # Before interpolation we only have 35 data points (amount of voxels in the line profile)
     profile_x = interpolate_lineprofile_cubic(profile_x, num_points=400)
@@ -1376,32 +1440,50 @@ def recovery_coefficient_correction_method_2(profile_x, profile_y, profile_z, x_
     profile_z = interpolate_lineprofile_cubic(profile_z, num_points=400)
 
     # Create a 1D masks for the artery
-    artery_mask_x = create_1d_mask(x_artery, profile_x.shape)
-    artery_mask_y = create_1d_mask(y_artery, profile_y.shape)
-    artery_mask_z = create_1d_mask(z_artery, profile_z.shape)
+    artery_mask_x_1 = create_1d_mask(x_artery_1, profile_x.shape)
+    artery_mask_y_1 = create_1d_mask(y_artery_1, profile_y.shape)
+    artery_mask_z_1 = create_1d_mask(z_artery_1, profile_z.shape)
+    artery_mask_x_2 = create_1d_mask(x_artery_2, profile_x.shape)
+    artery_mask_y_2 = create_1d_mask(y_artery_2, profile_y.shape)
+    artery_mask_z_2 = create_1d_mask(z_artery_2, profile_z.shape)
                                    
-    # Apply the artery mask to the 1D profiles
-    profile_x_artery = profile_x[artery_mask_x]
-    print(f"Profile x artery: {profile_x_artery}")
-    profile_y_artery = profile_y[artery_mask_y]
-    profile_z_artery = profile_z[artery_mask_z]
+    # Apply the artery mask to the 1D line profiles
+    profile_x_artery_1 = profile_x[artery_mask_x_1]
+    profile_y_artery_1 = profile_y[artery_mask_y_1]
+    profile_z_artery_1 = profile_z[artery_mask_z_1]
+    profile_x_artery_2 = profile_x[artery_mask_x_2]
+    profile_y_artery_2 = profile_y[artery_mask_y_2]
+    profile_z_artery_2 = profile_z[artery_mask_z_2]
 
     # Get the mean value of the artery profiles
-    mean_x_artery = np.mean(profile_x_artery)
-    mean_y_artery = np.mean(profile_y_artery)
-    mean_z_artery = np.mean(profile_z_artery)
+    mean_x_artery_1 = np.mean(profile_x_artery_1)
+    mean_y_artery_1 = np.mean(profile_y_artery_1)
+    mean_z_artery_1 = np.mean(profile_z_artery_1)
+    mean_x_artery_2 = np.mean(profile_x_artery_2)
+    mean_y_artery_2 = np.mean(profile_y_artery_2)
+    mean_z_artery_2 = np.mean(profile_z_artery_2)
 
     # Define the true_activity_concentration
     true_activity_concentration = 26166.28  # Activity concentration at scan start for the first NEMA IQ scan from the 10.10.2024 [Bq/mL]
 
     # Calculate the recovery coefficients
-    recovery_coefficient_x = mean_x_artery / true_activity_concentration
-    recovery_coefficient_y = mean_y_artery / true_activity_concentration
-    recovery_coefficient_z = mean_z_artery / true_activity_concentration
+    recovery_coefficient_x_1 = mean_x_artery_1 / true_activity_concentration
+    recovery_coefficient_y_1 = mean_y_artery_1 / true_activity_concentration
+    recovery_coefficient_z_1 = mean_z_artery_1 / true_activity_concentration
+    recovery_coefficient_x_2 = mean_x_artery_2 / true_activity_concentration
+    recovery_coefficient_y_2 = mean_y_artery_2 / true_activity_concentration
+    recovery_coefficient_z_2 = mean_z_artery_2 / true_activity_concentration
 
-    print(f"Recovery coefficient x: {recovery_coefficient_x:.2f}")
-    print(f"Recovery coefficient y: {recovery_coefficient_y:.2f}")  
-    print(f"Recovery coefficient z: {recovery_coefficient_z:.2f}")
+    print(f"Recovery coefficient x_1: {recovery_coefficient_x_1:.2f}")
+    print(f"Recovery coefficient y_1: {recovery_coefficient_y_1:.2f}")  
+    print(f"Recovery coefficient z_1: {recovery_coefficient_z_1:.2f}")
+    print(f"Recovery coefficient x_2: {recovery_coefficient_x_2:.2f}")
+    print(f"Recovery coefficient y_2: {recovery_coefficient_y_2:.2f}")
+    print(f"Recovery coefficient z_2: {recovery_coefficient_z_2:.2f}")
+
+    # Mean value of all RCs
+    mean_rc = np.mean([recovery_coefficient_x_1, recovery_coefficient_y_1, recovery_coefficient_z_1, recovery_coefficient_x_2, recovery_coefficient_y_2, recovery_coefficient_z_2])
+    print(f"Mean Recovery Coefficient: {mean_rc:.4f}")
 
 def interpolate_lineprofile_cubic(profile, num_points=200):
     """
@@ -1423,16 +1505,16 @@ def interpolate_lineprofile_cubic(profile, num_points=200):
     # Cubic interpolation
     cubic_interpolator = interp1d(x_original, profile, kind='cubic')
     profile_interpolated = cubic_interpolator(x_new)
-    
-    # Plot original and interpolated profiles
-    plt.plot(np.linspace(0, 34, len(profile)), profile, 'o', label='Original Profile')
-    #plt.plot(np.linspace(0, 34, 200), x_profile_interpolated, '-', label='Linear Interpolation (200 points)')
-    plt.plot(np.linspace(0, 34, num_points), profile_interpolated, '--', label='Cubic Interpolation')
-    plt.legend()
-    plt.title("Original vs Interpolated Profiles")
-    plt.xlabel("Index")
-    plt.ylabel("Value")
-    plt.show()
+    if False:
+        # Plot original and interpolated profiles
+        plt.plot(np.linspace(0, 34, len(profile)), profile, 'o', label='Original Profile')
+        #plt.plot(np.linspace(0, 34, 200), x_profile_interpolated, '-', label='Linear Interpolation (200 points)')
+        plt.plot(np.linspace(0, 34, num_points), profile_interpolated, '--', label='Cubic Interpolation')
+        plt.legend()
+        plt.title("Original vs Interpolated Profiles")
+        plt.xlabel("Index")
+        plt.ylabel("Value")
+        plt.show()
     return profile_interpolated
 
 def combine_2d_profile(profile_x, profile_y):
@@ -1557,6 +1639,7 @@ def create_1d_mask(mask_size, profile_shape):
     Returns:
     np.array: A 1D boolean array representing the mask.
     """
+    mask_size = int(round(mask_size))  # Convert mask_size to an integer by rounding (might sometimes be a float, depending on what the user enters)
     profile_length = profile_shape[0]  # Extract the integer value from the tuple
     mask = np.zeros(profile_length, dtype=bool)
     mask_center = profile_length // 2
