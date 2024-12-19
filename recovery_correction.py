@@ -1217,6 +1217,7 @@ def get_line_profiles(image_stack, centers):
     plot_line_profiles(profiles, sphere_sizes)
 
     handle_recovery_coefficient_correction_coordinate_shift(profiles)
+    handle_recovery_coefficient_correction_full(profiles)
     
     return profiles
 
