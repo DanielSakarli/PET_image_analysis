@@ -3,25 +3,47 @@ from scipy.stats import spearmanr
 import matplotlib.pyplot as plt
 
 def process_csv(file_path):
-    # Load the CSV file into a pandas DataFrame
-    df = pd.read_csv(file_path)
+    # Load the CSV file
+    df = pd.read_csv(file_path, delimiter=";")
     
-    # Select the relevant columns
-    columns_to_select = ["Patient_ID", "Model", "K1", "k2", "k3", "k4"]
-    selected_df = df[columns_to_select]
+    # Ensure the required columns exist
+    required_columns = ["Patient_ID", "Model", "K1", "k2", "k3", "k4", "vB"]
+    if not all(col in df.columns for col in required_columns):
+        raise ValueError(f"CSV file must contain the following columns: {required_columns}")
     
-    # Filter unique rows based on 'Patient_ID' and 'Model'
-    grouped = selected_df.groupby(['Patient_ID', 'Model'])
-    
-    # Create a dictionary to store DataFrames for each unique Patient_ID and Model
-    unique_dataframes = {}
-    
-    for (patient_id, model), group in grouped:
-        # Store the DataFrame in the dictionary
-        unique_dataframes[(patient_id, model)] = group
-        
-    return unique_dataframes
+    # Group the data by Patient_ID and Model
+    grouped = df.groupby(["Patient_ID", "Model"])
+    print(grouped.head())
 
+    # Only take the first entry (lesion) of each unique Patient_ID where the Model is "2_Tissue_Compartments" and vB is not 0.05
+    df = df[(df["Model"] == "2_Tissue_Compartments") & (df["vB"] != 0.05)].groupby("Patient_ID").first().reset_index()
+    print(df.head())
+
+    # Split the Patient_ID into patient number and reconstruction method
+    df[['Patient_Number', 'Reconstruction_Method']] = df['Patient_ID'].str.split('_', n=1, expand=True)
+    print(df.head())
+
+    # Create a pivot table for K1 values with Patient_Number as the index and Reconstruction_Method as the columns
+    pivot_df = df.pivot(index="Patient_Number", columns="Reconstruction_Method", values="K1")
+    
+    print(f"Columns: {pivot_df.columns}")
+    print(f"Rows: {pivot_df.shape[0]}")
+    
+    # Compute Spearman correlation for each patient
+    correlation_results = {}
+    for patient in pivot_df.index:
+        patient_data = pivot_df.loc[patient].dropna()
+        if len(patient_data) > 1:  # Ensure there are at least two reconstruction methods to correlate
+            correlation = patient_data.corr(method="spearman")
+            correlation_results[patient] = correlation
+        else:
+            correlation_results[patient] = None
+
+    # Compute correlation matrix
+    #correlation_matrix = pivot_df.corr(method="spearman")  # Use Pearson correlation
+    print(correlation_results)
+
+    
 def calculate_spearman_correlation(df1, df2):
     """
     Calculates the Spearman correlation coefficient and p-value between K1 values of two DataFrames.
@@ -51,7 +73,7 @@ def plot_correlation(df1, df2, correlation, p_value):
 
 
 if __name__ == "__main__":
-    file_path = "your_file.csv"
+    file_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Kinetic Modelling//PSMA001_k_values.csv"
     unique_dfs = process_csv(file_path)
     
     # Get DataFrames for specific Patient_ID and Model
