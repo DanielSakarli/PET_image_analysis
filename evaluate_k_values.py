@@ -3,7 +3,7 @@ from scipy.stats import spearmanr
 import matplotlib.pyplot as plt
 
 def process_csv(file_path):
-    # Load the CSV file
+    # Load the CSV file into a pandas DataFrame
     df = pd.read_csv(file_path, delimiter=";")
     
     # Ensure the required columns exist
@@ -11,37 +11,45 @@ def process_csv(file_path):
     if not all(col in df.columns for col in required_columns):
         raise ValueError(f"CSV file must contain the following columns: {required_columns}")
     
-    # Group the data by Patient_ID and Model
-    grouped = df.groupby(["Patient_ID", "Model"])
-    print(grouped.head())
-
-    # Only take the first entry (lesion) of each unique Patient_ID where the Model is "2_Tissue_Compartments" and vB is not 0.05
+    # Filter the data to include only relevant rows
     df = df[(df["Model"] == "2_Tissue_Compartments") & (df["vB"] != 0.05)].groupby("Patient_ID").first().reset_index()
-    print(df.head())
 
-    # Split the Patient_ID into patient number and reconstruction method
+    # Split the Patient_ID into Patient_Number and Reconstruction_Method
     df[['Patient_Number', 'Reconstruction_Method']] = df['Patient_ID'].str.split('_', n=1, expand=True)
-    print(df.head())
 
-    # Create a pivot table for K1 values with Patient_Number as the index and Reconstruction_Method as the columns
+    # Create a pivot table for K1 values
     pivot_df = df.pivot(index="Patient_Number", columns="Reconstruction_Method", values="K1")
-    
+    print("pivot:", pivot_df)
+    # Print the structure of the pivot table
     print(f"Columns: {pivot_df.columns}")
     print(f"Rows: {pivot_df.shape[0]}")
-    
+
     # Compute Spearman correlation for each patient
     correlation_results = {}
     for patient in pivot_df.index:
-        patient_data = pivot_df.loc[patient].dropna()
-        if len(patient_data) > 1:  # Ensure there are at least two reconstruction methods to correlate
-            correlation = patient_data.corr(method="spearman")
-            correlation_results[patient] = correlation
-        else:
-            correlation_results[patient] = None
+        # Get all reconstruction K1 values for this patient as a DataFrame
+        #patient_data = pivot_df.loc[[patient]].T.dropna()  # Transpose and drop rows with NaN values
+        # Convert Series to DataFrame
+        
+        patient_data = pivot_df.loc[patient].dropna()  # Drop NaN values
+        
+        print("patient_data:", patient_data)
+        #patient_data.columns = [patient]  # Set the column name to the patient ID
 
-    # Compute correlation matrix
-    #correlation_matrix = pivot_df.corr(method="spearman")  # Use Pearson correlation
-    print(correlation_results)
+        if len(patient_data) > 1:  # Ensure at least two reconstruction methods
+            patient_data_df = patient_data.to_frame().T
+            # Compute the pairwise Spearman correlation for reconstruction methods
+            correlation_matrix = patient_data_df.corr(method="spearman")
+            correlation_results[patient] = correlation_matrix
+        else:
+            correlation_results[patient] = None  # Not enough data to compute correlation
+
+    # Print the correlation results
+    for patient, correlation_matrix in correlation_results.items():
+        if correlation_matrix is not None:
+            print(f"Patient {patient}: Correlation Matrix:\n{correlation_matrix}")
+        else:
+            print(f"Patient {patient}: Not enough data for correlation.")
 
     
 def calculate_spearman_correlation(df1, df2):
