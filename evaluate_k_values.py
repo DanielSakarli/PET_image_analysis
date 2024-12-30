@@ -31,6 +31,7 @@ def process_csv(file_path):
     # Generate boxplots for all patients
     print(f"dataframe before sending to boxplot: \n{df_2tc_re}")
     create_boxplot(df_2tc_re, k_variables)
+    create_lineplots(df_2tc_re, k_variables)
 
     return correlation_results
     
@@ -118,10 +119,18 @@ def create_boxplot(df, k_variables):
     plt.tight_layout()
     plt.show()
 
-    if False:
+def create_lineplots(df, k_variables):
+    """
+    Create line plots for the specified k variables (K1, k2, k3, k4) with reconstruction methods
+    on the x-axis and patient data as separate lines.
+
+    Args:
+        df (pd.DataFrame): The DataFrame containing the data.
+        k_variables (list): List of k variables to plot (e.g., ["K1", "k2", "k3", "k4"]).
+    """
+    for k_variable in k_variables:
         # Prepare data for plotting
-        boxplot_data = {k_variable: [] for k_variable in k_variables}
-        labels = []
+        data_for_plotting = []
 
         for patient in df["Patient_Number"].unique():
             # Filter the data for the specific patient
@@ -130,46 +139,41 @@ def create_boxplot(df, k_variables):
             if patient_data.empty:
                 continue
 
-            for k_variable in k_variables:
-                # Extract k_variable values for the patient
-                values = patient_data[k_variable]
-                print(f"Values for patient {patient}: {values}")
-                print(f"Type of values: {type(values)}")
-                
-                # Calculate the IQR and identify outlier thresholds
-                Q1 = values.quantile(0.25)
-                Q3 = values.quantile(0.75)
-                IQR = Q3 - Q1
-                lower_bound = Q1 - 1.5 * IQR
-                upper_bound = Q3 + 1.5 * IQR
+            # Append data to the plotting dataset
+            data_for_plotting.append(
+                pd.DataFrame({
+                    "Reconstruction_Method": patient_data["Reconstruction_Method"],
+                    k_variable: patient_data[k_variable],
+                    "Patient": patient
+                })
+            )
 
-                # Filter out outliers (ensure values is a Series)
-                filtered_values = values[(values >= lower_bound) & (values <= upper_bound)]
+        # Combine all patient data into one DataFrame
+        combined_data = pd.concat(data_for_plotting)
 
-                # Append data
-                boxplot_data[k_variable].append(filtered_values.tolist())  # Convert to list
+        # Create the line plot
+        plt.figure(figsize=(12, 6))
+        sns.lineplot(
+            data=combined_data,
+            x="Reconstruction_Method",
+            y=k_variable,
+            hue="Patient",
+            marker="o"
+        )
 
-            # Append patient label
-            labels.append(patient)
-
-        # Plot all boxplots in the same figure
-        fig, ax = plt.subplots(figsize=(12, 6))
-        colors = plt.cm.tab20.colors  # Use a colormap with enough colors for all patients
-        positions = []
-        for i, k_variable in enumerate(k_variables):
-            for j, patient in enumerate(labels):
-                positions.append(i * (len(labels) + 1) + j + 1)
-                ax.boxplot(boxplot_data[k_variable][j], positions=[positions[-1]], patch_artist=True,
-                        boxprops=dict(facecolor=colors[j % len(colors)], color=colors[j % len(colors)]),
-                        medianprops=dict(color='black'))
-
-        ax.set_xticks([i * (len(labels) + 1) + (len(labels) + 1) / 2 for i in range(len(k_variables))])
-        ax.set_xticklabels(k_variables)
-        ax.set_xlabel("k Variables")
-        ax.set_ylabel("Values")
-        ax.set_title("Value Distribution Across Patients and Variables")
+        sns.despine()  # Remove top and right axes
+        plt.title(f"Line Plot of {k_variable} Values Across Reconstruction Methods", fontsize=14)
+        plt.xlabel("Reconstruction Method", fontsize=12)
+        plt.ylabel(f"{k_variable} Values [min$^{-1}$]", fontsize=12)
+        plt.xticks(rotation=45)  # Rotate x-axis labels for readability
+        plt.legend(
+            title="Patient",
+            loc="upper right",  # Position within the plot
+            bbox_to_anchor=(0.98, 0.98)  # Fine-tune the location
+        )
         plt.tight_layout()
         plt.show()
+
 
 if __name__ == "__main__":
     file_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Kinetic Modelling//All_patients_k_values.csv"
