@@ -1,6 +1,6 @@
 import pandas as pd
-from scipy.stats import spearmanr
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 def process_csv(file_path):
     # Load the CSV file into a pandas DataFrame
@@ -10,95 +10,183 @@ def process_csv(file_path):
     required_columns = ["Patient_ID", "Model", "K1", "k2", "k3", "k4", "vB"]
     if not all(col in df.columns for col in required_columns):
         raise ValueError(f"CSV file must contain the following columns: {required_columns}")
-    
+
     # Filter the data to include only relevant rows
-    df = df[(df["Model"] == "2_Tissue_Compartments") & (df["vB"] != 0.05)].groupby("Patient_ID").first().reset_index()
+    df_2tc_re = df[(df["Model"] == "2_Tissue_Compartments") & (df["vB"] != 0.05)].groupby("Patient_ID").first().reset_index()
+    # Filter the data to include only relevant rows
+    df_2tc_irre = df[(df["Model"] == "2_Tissue_Compartments,_FDG") & (df["vB"] != 0.05)].groupby("Patient_ID").first().reset_index()
 
     # Split the Patient_ID into Patient_Number and Reconstruction_Method
-    df[['Patient_Number', 'Reconstruction_Method']] = df['Patient_ID'].str.split('_', n=1, expand=True)
+    df_2tc_re[['Patient_Number', 'Reconstruction_Method']] = df_2tc_re['Patient_ID'].str.split('_', n=1, expand=True)
+    df_2tc_irre[['Patient_Number', 'Reconstruction_Method']] = df_2tc_irre['Patient_ID'].str.split('_', n=1, expand=True)
 
-    # Create a pivot table for K1 values
-    pivot_df = df.pivot(index="Patient_Number", columns="Reconstruction_Method", values="K1")
-    print("pivot:", pivot_df)
-    # Print the structure of the pivot table
-    print(f"Columns: {pivot_df.columns}")
-    print(f"Rows: {pivot_df.shape[0]}")
-
-    # Compute Spearman correlation for each patient
+    # Calculate Spearman correlation for each k variable
+    k_variables = ["K1", "k2", "k3", "k4"]
     correlation_results = {}
-    for patient in pivot_df.index:
-        # Get all reconstruction K1 values for this patient as a DataFrame
-        #patient_data = pivot_df.loc[[patient]].T.dropna()  # Transpose and drop rows with NaN values
-        # Convert Series to DataFrame
-        
-        patient_data = pivot_df.loc[patient].dropna()  # Drop NaN values
-        
-        print("patient_data:", patient_data)
-        #patient_data.columns = [patient]  # Set the column name to the patient ID
+    for df, model in zip([df_2tc_re, df_2tc_irre], ["2_Tissue_Compartments", "2_Tissue_Compartments,_FDG"]):
+        for var in k_variables:
+            correlation_matrix = calculate_spearman_correlation(df, var, model)
+            correlation_results[(model, var)] = correlation_matrix
 
-        if len(patient_data) > 1:  # Ensure at least two reconstruction methods
-            patient_data_df = patient_data.to_frame().T
-            # Compute the pairwise Spearman correlation for reconstruction methods
-            correlation_matrix = patient_data_df.corr(method="spearman")
-            correlation_results[patient] = correlation_matrix
-        else:
-            correlation_results[patient] = None  # Not enough data to compute correlation
+    # Generate boxplots for all patients
+    print(f"dataframe before sending to boxplot: \n{df_2tc_re}")
+    create_boxplot(df_2tc_re, k_variables)
 
-    # Print the correlation results
-    for patient, correlation_matrix in correlation_results.items():
-        if correlation_matrix is not None:
-            print(f"Patient {patient}: Correlation Matrix:\n{correlation_matrix}")
-        else:
-            print(f"Patient {patient}: Not enough data for correlation.")
+    return correlation_results
+    
 
     
-def calculate_spearman_correlation(df1, df2):
+def calculate_spearman_correlation(df, k, model):
     """
-    Calculates the Spearman correlation coefficient and p-value between K1 values of two DataFrames.
+    Calculates the Spearman correlation coefficient and p-value between k values.
+    df: DataFrame containing the k values for each patient and reconstruction method.
+    k: The k variable to calculate the correlation for (either K1, k2, k3, or k4).
+    model: The compartment model type.
     """
-    k1_values_1 = df1['K1']
-    k1_values_2 = df2['K1']
-    
-    # Ensure the lengths are the same for correlation calculation
-    if len(k1_values_1) != len(k1_values_2):
-        raise ValueError("The two dataframes have different lengths, cannot calculate Spearman correlation.")
-    
-    # Calculate Spearman correlation
-    correlation, p_value = spearmanr(k1_values_1, k1_values_2)
-    return correlation, p_value
+    # Create a pivot table for k values across all patients
+    pivot_df = df.pivot(index="Patient_Number", columns="Reconstruction_Method", values=k)
+    print(f"\nPivot Table for {k} and {model}:\n", pivot_df)
 
-def plot_correlation(df1, df2, correlation, p_value):
+    # Compute the Spearman correlation for reconstruction methods globally
+    global_correlation_matrix = pivot_df.corr(method="spearman")
+    print(f"Global Spearman Correlation Matrix for {k} and {model}:\n", global_correlation_matrix)
+
+    return global_correlation_matrix
+
+
+def create_boxplot(df, k_variables):
     """
-    Plots a scatter plot of K1 values from two DataFrames and annotates it with Spearman correlation and p-value.
+    Create boxplots for the specified k variables (K1, k2, k3, k4) for a single patient.
+    The boxplots for all k variables are drawn in the same figure.
+
+    Args:
+        df (pd.DataFrame): The DataFrame containing the data.
+        k_variables (list): List of variables to create boxplots for (e.g., ["K1", "k2", "k3", "k4"]).
     """
-    plt.figure(figsize=(8, 6))
-    plt.scatter(df1['K1'], df2['K1'], alpha=0.7)
-    plt.title(f"Spearman Correlation: {correlation:.2f}, P-value: {p_value:.2e}")
-    plt.xlabel("K1 Values (PSMA001)")
-    plt.ylabel("K1 Values (PSMA001_a)")
-    plt.grid(True)
+    # Prepare data for plotting
+    data_for_plotting = []
+
+    for k_variable in k_variables:
+        for patient in df["Patient_Number"].unique():
+            # Filter the data for the specific patient
+            patient_data = df[df["Patient_Number"] == patient]
+
+            if patient_data.empty:
+                continue
+
+            # Extract k_variable values for the patient
+            values = patient_data[k_variable]
+
+            # Calculate the IQR and identify outlier thresholds
+            Q1 = values.quantile(0.25)
+            Q3 = values.quantile(0.75)
+            IQR = Q3 - Q1
+            lower_bound = Q1 - 1.5 * IQR
+            upper_bound = Q3 + 1.5 * IQR
+
+            # Filter out outliers
+            filtered_values = values[(values >= lower_bound) & (values <= upper_bound)]
+
+            # Append to the plotting data
+            data_for_plotting.append(
+                pd.DataFrame({
+                    "Values": filtered_values,
+                    "Patient": patient,
+                    "Variable": k_variable
+                })
+            )
+
+    # Combine all patient data into one DataFrame
+    combined_data = pd.concat(data_for_plotting)
+
+    # Create the boxplot using Seaborn
+    plt.figure(figsize=(12, 8))
+    sns.boxplot(
+        data=combined_data,
+        x="Variable",
+        y="Values",
+        hue="Patient",
+        dodge=True,  # Overlay boxplots for each variable
+        linewidth=1.5
+    )
+    sns.despine()  # Remove top and right axes
+    plt.grid(axis="y", linestyle="--", alpha=0.7)  # Add grid for better readability
+    plt.title("Boxplots of k Variables for All Reconstruction Settings", fontsize=14)
+    plt.xlabel("k Variables", fontsize=12)
+    plt.ylabel("k Values [min⁻¹]", fontsize=12)
+    plt.legend(title="Patient", bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.tight_layout()
     plt.show()
 
+    if False:
+        # Prepare data for plotting
+        boxplot_data = {k_variable: [] for k_variable in k_variables}
+        labels = []
+
+        for patient in df["Patient_Number"].unique():
+            # Filter the data for the specific patient
+            patient_data = df[df["Patient_Number"] == patient]
+
+            if patient_data.empty:
+                continue
+
+            for k_variable in k_variables:
+                # Extract k_variable values for the patient
+                values = patient_data[k_variable]
+                print(f"Values for patient {patient}: {values}")
+                print(f"Type of values: {type(values)}")
+                
+                # Calculate the IQR and identify outlier thresholds
+                Q1 = values.quantile(0.25)
+                Q3 = values.quantile(0.75)
+                IQR = Q3 - Q1
+                lower_bound = Q1 - 1.5 * IQR
+                upper_bound = Q3 + 1.5 * IQR
+
+                # Filter out outliers (ensure values is a Series)
+                filtered_values = values[(values >= lower_bound) & (values <= upper_bound)]
+
+                # Append data
+                boxplot_data[k_variable].append(filtered_values.tolist())  # Convert to list
+
+            # Append patient label
+            labels.append(patient)
+
+        # Plot all boxplots in the same figure
+        fig, ax = plt.subplots(figsize=(12, 6))
+        colors = plt.cm.tab20.colors  # Use a colormap with enough colors for all patients
+        positions = []
+        for i, k_variable in enumerate(k_variables):
+            for j, patient in enumerate(labels):
+                positions.append(i * (len(labels) + 1) + j + 1)
+                ax.boxplot(boxplot_data[k_variable][j], positions=[positions[-1]], patch_artist=True,
+                        boxprops=dict(facecolor=colors[j % len(colors)], color=colors[j % len(colors)]),
+                        medianprops=dict(color='black'))
+
+        ax.set_xticks([i * (len(labels) + 1) + (len(labels) + 1) / 2 for i in range(len(k_variables))])
+        ax.set_xticklabels(k_variables)
+        ax.set_xlabel("k Variables")
+        ax.set_ylabel("Values")
+        ax.set_title("Value Distribution Across Patients and Variables")
+        plt.tight_layout()
+        plt.show()
 
 if __name__ == "__main__":
-    file_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Kinetic Modelling//PSMA001_k_values.csv"
-    unique_dfs = process_csv(file_path)
+    file_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Kinetic Modelling//All_patients_k_values.csv"
+    process_csv(file_path)
     
-    # Get DataFrames for specific Patient_ID and Model
-    df_psma001_02_two_c_irre = unique_dfs.get(("PSMA001_02", "2_Tissue_Compartments"))    # two comparments irreversible
-    df_psma001_02_two_c_re = unique_dfs.get(("PSMA001_02", "2_Tissue_Compartments,_FDG"))      # two compartments reversible
-
-    if df_psma001_02_two_c_irre is not None and df_psma001_02_two_c_re is not None:
-        # Calculate Spearman correlation
-        try:
-            correlation, p_value = calculate_spearman_correlation(df_psma001_02_two_c_irre, df_psma001_02_two_c_re)
-            print(f"Spearman Correlation: {correlation}")
-            print(f"P-value: {p_value}")
-            plot_correlation(df_psma001_02_two_c_irre, df_psma001_02_two_c_re, correlation, p_value)
-        except ValueError as e:
-            print(f"Error: {e}")
-    else:
-        print("One or both of the specified Patient_IDs are missing.")
     if False:
-        for patient_id, df in unique_dfs.items():
-            df.to_csv(f"Patient_{patient_id}.csv", index=False)
+        # Get DataFrames for specific Patient_ID and Model
+        df_psma001_02_two_c_irre = unique_dfs.get(("PSMA001_02", "2_Tissue_Compartments"))    # two comparments irreversible
+        df_psma001_02_two_c_re = unique_dfs.get(("PSMA001_02", "2_Tissue_Compartments,_FDG"))      # two compartments reversible
+
+        if df_psma001_02_two_c_irre is not None and df_psma001_02_two_c_re is not None:
+            # Calculate Spearman correlation
+            try:
+                correlation, p_value = calculate_spearman_correlation(df_psma001_02_two_c_irre, df_psma001_02_two_c_re)
+                print(f"Spearman Correlation: {correlation}")
+                print(f"P-value: {p_value}")
+            except ValueError as e:
+                print(f"Error: {e}")
+        else:
+            print("One or both of the specified Patient_IDs are missing.")
