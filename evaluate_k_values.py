@@ -7,13 +7,12 @@ def process_csv(file_path):
     df = pd.read_csv(file_path, delimiter=";")
     
     # Ensure the required columns exist
-    required_columns = ["Patient_ID", "Model", "K1", "k2", "k3", "k4", "vB"]
+    required_columns = ["Patient_ID", "Model", "K1", "k2", "k3", "k4", "vB", "Flux"]
     if not all(col in df.columns for col in required_columns):
         raise ValueError(f"CSV file must contain the following columns: {required_columns}")
 
     # Filter the data to include only relevant rows
     df_2tc_re = df[(df["Model"] == "2_Tissue_Compartments") & (df["vB"] != 0.05)].groupby("Patient_ID").first().reset_index()
-    # Filter the data to include only relevant rows
     df_2tc_irre = df[(df["Model"] == "2_Tissue_Compartments,_FDG") & (df["vB"] != 0.05)].groupby("Patient_ID").first().reset_index()
 
     # Split the Patient_ID into Patient_Number and Reconstruction_Method
@@ -21,18 +20,22 @@ def process_csv(file_path):
     df_2tc_irre[['Patient_Number', 'Reconstruction_Method']] = df_2tc_irre['Patient_ID'].str.split('_', n=1, expand=True)
 
     # Calculate Spearman correlation for each k variable
-    k_variables = ["K1", "k2", "k3", "k4"]
+    k_variables = ["Flux", "K1", "k2", "k3", "k4"]
     correlation_results = {}
     for df, model in zip([df_2tc_re, df_2tc_irre], ["2_Tissue_Compartments", "2_Tissue_Compartments,_FDG"]):
         for var in k_variables:
             correlation_matrix = calculate_spearman_correlation(df, var, model)
             correlation_results[(model, var)] = correlation_matrix
 
-    # Generate boxplots for all patients
-    print(f"dataframe before sending to boxplot: \n{df_2tc_re}")
+    # Generate boxplots for all patients and k variables
+    # With the reversible model
     create_boxplot(df_2tc_re, k_variables)
     create_lineplots(df_2tc_re, k_variables)
-
+    # With the irreversible model, exclude the k4 variable
+    k_variables.remove("k4")
+    create_boxplot(df_2tc_irre, k_variables)
+    create_lineplots(df_2tc_irre, k_variables)
+    
     return correlation_results
     
 
@@ -64,9 +67,17 @@ def create_boxplot(df, k_variables):
         df (pd.DataFrame): The DataFrame containing the data.
         k_variables (list): List of variables to create boxplots for (e.g., ["K1", "k2", "k3", "k4"]).
     """
+    
+    # Get model name for the title
+    if df["Model"].iloc[0] == "2_Tissue_Compartments":
+        model_name = "Two Compartment Reversible Model"
+    elif df["Model"].iloc[0] == "2_Tissue_Compartments,_FDG":
+        model_name = "Two Compartment Irreversible Model"
+    else:
+        model_name = "Unknown Model"
+
     # Prepare data for plotting
     data_for_plotting = []
-
     for k_variable in k_variables:
         for patient in df["Patient_Number"].unique():
             # Filter the data for the specific patient
@@ -112,7 +123,7 @@ def create_boxplot(df, k_variables):
     )
     sns.despine()  # Remove top and right axes
     plt.grid(axis="y", linestyle="--", alpha=0.7)  # Add grid for better readability
-    plt.title("Boxplots of k Variables for All Reconstruction Settings", fontsize=14)
+    plt.title(f"{model_name} with all Recon Settings", fontsize=14)
     plt.xlabel("k Variables", fontsize=12)
     plt.ylabel("k Values [min⁻¹]", fontsize=12)
     plt.legend(title="Patient", bbox_to_anchor=(1.05, 1), loc='upper left')
@@ -128,6 +139,15 @@ def create_lineplots(df, k_variables):
         df (pd.DataFrame): The DataFrame containing the data.
         k_variables (list): List of k variables to plot (e.g., ["K1", "k2", "k3", "k4"]).
     """
+
+    # Get model name for the title
+    if df["Model"].iloc[0] == "2_Tissue_Compartments":
+        model_name = "Two Compartment Reversible Model"
+    elif df["Model"].iloc[0] == "2_Tissue_Compartments,_FDG":
+        model_name = "Two Compartment Irreversible Model"
+    else:
+        model_name = "Unknown Model"
+
     for k_variable in k_variables:
         # Prepare data for plotting
         data_for_plotting = []
@@ -162,10 +182,10 @@ def create_lineplots(df, k_variables):
         )
 
         sns.despine()  # Remove top and right axes
-        plt.title(f"Line Plot of {k_variable} Values Across Reconstruction Methods", fontsize=14)
+        plt.title(f"{model_name} Across Reconstruction Methods", fontsize=14)
         plt.xlabel("Reconstruction Method", fontsize=12)
         plt.ylabel(f"{k_variable} Values [min$^{-1}$]", fontsize=12)
-        plt.xticks(rotation=45)  # Rotate x-axis labels for readability
+        #plt.xticks(rotation=45)  # Rotate x-axis labels for readability
         plt.legend(
             title="Patient",
             loc="upper right",  # Position within the plot
