@@ -892,7 +892,7 @@ def noise_vs_sphere_size():
     #roi_masks = masks # Save the 3D masks in global roi_masks to display them later on
     
     # Handle RC correction with spherical VOIs
-    handle_recovery_coefficient_correction_coordinate_shift_spherical_VOI(masks)
+    #handle_recovery_coefficient_correction_coordinate_shift_spherical_VOI(masks)
     handle_recovery_coefficient_correction_full_spherical_VOI(masks)
 
     ir_values = get_ir_value(masks, sphere_sizes) 
@@ -1510,7 +1510,7 @@ def handle_recovery_coefficient_correction_full_spherical_VOI(masks):
 
     # Calculate the recovery coefficient for this specific artery shape
     #recovery_coefficient_correction_method_1(profile_x, profile_y, profile_z, x_artery, y_artery, z_artery)
-    recovery_coefficient_correction_method_4(masks_x_prime, masks_y_prime, masks_z_prime, x_artery_1, y_artery_1, z_artery_1, x_artery_2, y_artery_2, z_artery_2)
+    recovery_coefficient_correction_method_3(masks_x_prime, masks_y_prime, masks_z_prime, x_artery_1, y_artery_1, z_artery_1, x_artery_2, y_artery_2, z_artery_2)
 
 def recovery_coefficient_correction_method_1(profile_x, profile_y, profile_z, x_artery, y_artery, z_artery):
     """
