@@ -1,6 +1,9 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import os
+import pickle
+from tkinter import messagebox
 
 def process_csv(file_path):
     # Load the CSV file into a pandas DataFrame
@@ -18,6 +21,14 @@ def process_csv(file_path):
     # Split the Patient_ID into Patient_Number and Reconstruction_Method
     df_2tc_re[['Patient_Number', 'Reconstruction_Method']] = df_2tc_re['Patient_ID'].str.split('_', n=1, expand=True)
     df_2tc_irre[['Patient_Number', 'Reconstruction_Method']] = df_2tc_irre['Patient_ID'].str.split('_', n=1, expand=True)
+
+    # Divide the df into the different regions lesion, healthy_prostate, and gluteus_maximus
+    df_2tc_re_lesion = df_2tc_re[df_2tc_re["Region"] == "lesion"]
+    df_2tc_re_healthy_prostate = df_2tc_re[df_2tc_re["Region"] == "healthy_prostate"]
+    df_2tc_re_gluteus_maximus = df_2tc_re[df_2tc_re["Region"] == "gluteus_maximus"]
+    df_2tc_irre_lesion = df_2tc_irre[df_2tc_irre["Region"] == "lesion"]
+    df_2tc_irre_healthy_prostate = df_2tc_irre[df_2tc_irre["Region"] == "healthy_prostate"]
+    df_2tc_irre_gluteus_maximus = df_2tc_irre[df_2tc_irre["Region"] == "gluteus_maximus"]
 
     # Calculate Spearman correlation for each k variable
     k_variables = ["Flux", "K1", "k2", "k3", "k4"]
@@ -68,13 +79,20 @@ def create_boxplot(df, k_variables):
         k_variables (list): List of variables to create boxplots for (e.g., ["K1", "k2", "k3", "k4"]).
     """
     
-    # Get model name for the title
+    # Get model and region name for the title
     if df["Model"].iloc[0] == "2_Tissue_Compartments":
         model_name = "Two Compartment Reversible Model"
     elif df["Model"].iloc[0] == "2_Tissue_Compartments,_FDG":
         model_name = "Two Compartment Irreversible Model"
     else:
         model_name = "Unknown Model"
+
+    if df["Region"].iloc[0] == "lesion":
+        region_name = "Lesion"
+    elif df["Region"].iloc[0] == "healthy_prostate":
+        region_name = "Healthy Prostate"
+    elif df["Region"].iloc[0] == "gluteus_maximus":
+        region_name = "Gluteus Maximus"
 
     # Prepare data for plotting
     data_for_plotting = []
@@ -123,11 +141,27 @@ def create_boxplot(df, k_variables):
     )
     sns.despine()  # Remove top and right axes
     plt.grid(axis="y", linestyle="--", alpha=0.7)  # Add grid for better readability
-    plt.title(f"{model_name} with all Recon Settings", fontsize=14)
+    plt.title(f"{model_name} for {region_name} with all Recon Settings", fontsize=14)
     plt.xlabel("k Variables", fontsize=12)
     plt.ylabel("k Values [min⁻¹]", fontsize=12)
     plt.legend(title="Patient", bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.tight_layout()
+    # Show the plot to the user
+    plt.show(block=False)
+    save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Kinetic Modelling//Boxplots"
+    png_path = os.path.join(save_path, f'IDIF_four_hottest_pixel_{model_name}_for_{region_name}_all_recon_settings.png')
+    pdf_path = os.path.join(save_path, f'IDIF_four_hottest_pixel_{model_name}_for_{region_name}_all_recon_settings.pdf')
+    pickle_path = os.path.join(save_path, f'IDIF_four_hottest_pixel_{model_name}_for_{region_name}_all_recon_settings.pickle')
+    
+    answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here:\n{save_path}\nas\n{png_path}?")
+    if answer:
+        # Save the plot as PNG, PDF, and pickle files
+        plt.savefig(png_path)
+        plt.savefig(pdf_path)
+        with open(pickle_path, 'wb') as f:
+            pickle.dump(plt.gcf(), f)
+
+    # Show the plot again to ensure it remains visible after saving it
     plt.show()
 
 def create_lineplots(df, k_variables):
@@ -140,13 +174,20 @@ def create_lineplots(df, k_variables):
         k_variables (list): List of k variables to plot (e.g., ["K1", "k2", "k3", "k4"]).
     """
 
-    # Get model name for the title
+    # Get model and region name for the title
     if df["Model"].iloc[0] == "2_Tissue_Compartments":
         model_name = "Two Compartment Reversible Model"
     elif df["Model"].iloc[0] == "2_Tissue_Compartments,_FDG":
         model_name = "Two Compartment Irreversible Model"
     else:
         model_name = "Unknown Model"
+
+    if df["Region"].iloc[0] == "lesion":
+        region_name = "Lesion"
+    elif df["Region"].iloc[0] == "healthy_prostate":
+        region_name = "Healthy Prostate"
+    elif df["Region"].iloc[0] == "gluteus_maximus":
+        region_name = "Gluteus Maximus"
 
     for k_variable in k_variables:
         # Prepare data for plotting
@@ -182,7 +223,7 @@ def create_lineplots(df, k_variables):
         )
 
         sns.despine()  # Remove top and right axes
-        plt.title(f"{model_name} Across Reconstruction Methods", fontsize=14)
+        plt.title(f"{model_name} for {region_name} Across Reconstruction Methods", fontsize=14)
         plt.xlabel("Reconstruction Method", fontsize=12)
         plt.ylabel(f"{k_variable} Values [min$^{-1}$]", fontsize=12)
         #plt.xticks(rotation=45)  # Rotate x-axis labels for readability
@@ -192,11 +233,27 @@ def create_lineplots(df, k_variables):
             bbox_to_anchor=(0.98, 0.98)  # Fine-tune the location
         )
         plt.tight_layout()
+        # Show the plot to the user
+        plt.show(block=False)
+        save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Kinetic Modelling//Lineplots"
+        png_path = os.path.join(save_path, f'IDIF_four_hottest_pixel_{model_name}_for_{region_name}_and_{k_variable}_variable_all_recon_settings.png')
+        pdf_path = os.path.join(save_path, f'IDIF_four_hottest_pixel_{model_name}_for_{region_name}_and_{k_variable}_variable_all_recon_settings.pdf')
+        pickle_path = os.path.join(save_path, f'IDIF_four_hottest_pixel_{model_name}_for_{region_name}_and_{k_variable}_variable_all_recon_settings.pickle')
+        
+        answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here:\n{save_path}\nas\n{png_path}?")
+        if answer:
+            # Save the plot as PNG, PDF, and pickle files
+            plt.savefig(png_path)
+            plt.savefig(pdf_path)
+            with open(pickle_path, 'wb') as f:
+                pickle.dump(plt.gcf(), f)
+
+        # Show the plot again to ensure it remains visible after saving it
         plt.show()
 
 
 if __name__ == "__main__":
-    file_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Kinetic Modelling//All_patients_k_values.csv"
+    file_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Kinetic Modelling//All_patients_k_values_IDIF_one_hottest_pixel.csv"
     process_csv(file_path)
     
     if False:

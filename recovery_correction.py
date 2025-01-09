@@ -23,13 +23,13 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
-from matplotlib.patches import Circle
+#from matplotlib.patches import Circle
 import numpy as np
 from scipy import ndimage
 from matplotlib.colors import Normalize
 import pickle
 import concurrent.futures
-from tqdm import tqdm
+#from tqdm import tqdm
 from scipy.interpolate import interp1d
 
 
@@ -812,7 +812,7 @@ def noise_vs_sphere_size():
     
     # If this flag is true we use the same center for all spheres and increase the
     # sphere size continuously (1 to 38 mm)
-    flag_continuous_sphere_sizes = False
+    flag_continuous_sphere_sizes = True
     flag_spherical_RC_mean_in_background_close_to_hot_sphere = False
     flag_cylindrical_RC_mean_in_background_close_to_hot_sphere = False
     # Flag that turns the spherical VOIs to cylindrical VOIs (centerline approach for iliac artery)
@@ -827,7 +827,9 @@ def noise_vs_sphere_size():
     if flag_continuous_sphere_sizes or flag_cylindrical_VOI:
         #centers = [(current_index, 280, 180)] # center in background
         #centers = [(current_index, 212, 273)] # center of smallest sphere for second NEMA scan November 2024
-        centers = [(current_index, 210, 271)] # center of smallest sphere with first NEMA scan 10.10.2024
+        #centers = [(current_index, 210, 271)] # center of smallest sphere with first NEMA scan 10.10.2024
+        centers = [(current_index, 210, 271), (current_index, 217, 228), (current_index, 256, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]
+
     elif flag_spherical_RC_mean_in_background_close_to_hot_sphere or flag_cylindrical_RC_mean_in_background_close_to_hot_sphere:
         centers = [(current_index, 212, 265)]
     else:
@@ -837,28 +839,37 @@ def noise_vs_sphere_size():
         # NEMA IQ phantom centers for first scan from the 10.10.2024
         centers = [(current_index, 210, 271), (current_index, 217, 228), (current_index, 256, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]
 
-    # Centers of 6 3D spheres with a 344x344 image size, increasing sphere sizes
-    # centers = [(0, 142, 183), (0, 146, 154), (0, 172, 144), (0, 194, 161), (0, 190, 189), (0, 165, 200)] 
+        # Centers of 6 3D spheres with a 344x344 image size, increasing sphere sizes
+        # centers = [(0, 142, 183), (0, 146, 154), (0, 172, 144), (0, 194, 161), (0, 190, 189), (0, 165, 200)] 
     
-    get_line_profiles(image_stack, centers)
+    #get_line_profiles(image_stack, centers)
 
-    # VOI radius in pixels for plot_mean_vs_sphere_size()
-    #voi_sizes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13] # intentionally goes over the borders of the actual sphere size to see how the noise and mean behave over the sphere size border
-    
     if flag_continuous_sphere_sizes or flag_cylindrical_VOI or flag_spherical_RC_mean_in_background_close_to_hot_sphere or flag_cylindrical_RC_mean_in_background_close_to_hot_sphere:
-        sphere_sizes = np.arange(1, 38, 1) # in mm
+        #sphere_sizes = np.arange(1, 38, 0.1) # in mm
+        # Extract voxel size from DICOM image
+        pixel_spacing = dicom_images[0][0x0028, 0x0030].value
+        # Define sphere sizes in mm but in steps of voxels
+        sphere_sizes = np.arange(0, 25, pixel_spacing[0])
+
     else:
         sphere_sizes = [10, 13, 17, 22, 28, 37]  # in mm
     
-    masks = []
+    masks_10mm_centers = []
+    masks_13mm_centers = []
+    masks_17mm_centers = []
+    masks_22mm_centers = []
     ir_values = [] # image roughness values (i.e. the noise)
     
     for i, sphere_size  in enumerate(sphere_sizes):
     #for center, sphere_radius in zip(centers, sphere_sizes):
         if flag_continuous_sphere_sizes or flag_cylindrical_VOI or flag_spherical_RC_mean_in_background_close_to_hot_sphere or flag_cylindrical_RC_mean_in_background_close_to_hot_sphere:
-            center = centers[0] # Center of the smallest sphere (10 mm)
+            center_10mm = centers[0] # Center of the smallest sphere (10 mm)
+            center_13mm = centers[1] # Center of the 13 mm sphere
+            center_17mm = centers[2]
+            center_22mm = centers[3]
         else:
             center = centers[i]
+        print(f"Sphere size: {sphere_size} mm")
         radius_mm = sphere_size / 2
         # Read in the pixel size of the DICOM image
         pixel_spacing = dicom_images[0][0x0028, 0x0030].value
@@ -868,11 +879,22 @@ def noise_vs_sphere_size():
             height_pixels = 5 # 5 slices in z-direction, approx. equalling 10 mm
             mask = create_cylindrical_mask(center, radius_pixels, height_pixels, shape)
         else:
-            mask = create_3d_spherical_mask(center, radius_pixels, shape)
-        masks.append(mask)
+            mask_10mm_center = create_3d_spherical_mask(center_10mm, radius_pixels, shape)
+            mask_13mm_center = create_3d_spherical_mask(center_13mm, radius_pixels, shape)
+            mask_17mm_center = create_3d_spherical_mask(center_17mm, radius_pixels, shape)
+            mask_22mm_center = create_3d_spherical_mask(center_22mm, radius_pixels, shape)
+        masks_10mm_centers.append(mask_10mm_center)
+        masks_13mm_centers.append(mask_13mm_center)
+        masks_17mm_centers.append(mask_17mm_center)
+        masks_22mm_centers.append(mask_22mm_center)
+
+    masks = [masks_10mm_centers, masks_13mm_centers, masks_17mm_centers, masks_22mm_centers]
+    #roi_masks = masks # Save the 3D masks in global roi_masks to display them later on
     
-    roi_masks = masks # Save the 3D masks in global roi_masks to display them later on
-    
+    # Handle RC correction with spherical VOIs
+    handle_recovery_coefficient_correction_coordinate_shift_spherical_VOI(masks)
+    handle_recovery_coefficient_correction_full_spherical_VOI(masks)
+
     ir_values = get_ir_value(masks, sphere_sizes) 
     std_values = get_std_values(image_stack, masks, sphere_sizes) #If get_ir_value is commented out: include iteration_count += 1 in get_std_values
     
@@ -1320,7 +1342,78 @@ def handle_recovery_coefficient_correction_coordinate_shift(profiles):
     # Calculate the recovery coefficient for this specific artery shape
     #recovery_coefficient_correction_method_1(profile_x, profile_y, profile_z, x_artery, y_artery, z_artery)
     recovery_coefficient_correction_method_2(profile_x, profile_y, profile_z, x_artery_1, y_artery_1, z_artery_1, x_artery_2, y_artery_2, z_artery_2)
+
+def handle_recovery_coefficient_correction_coordinate_shift_spherical_VOI(masks):
+    # Named the method coordinate_shift, because I take the x and y values of the two vectors v_1 = (x_1, y_1, z_1) and v_2 = (x_2, y_2, z_2)
+    # and add x' = x_1 + x_2 and y' = y_1 + y_2 as a basis to choose the corresponding line profile (from the different sphere sizes)
+    global dicom_images
+    slice_thickness = dicom_images[0][0x0018, 0x0050].value
+
+    # Get the artery dimensioms in x, y, and z direction for the two vectors v_1 and v_2
+    x_artery_1 = float(input("\nEnter the artery dimension in the x direction for v_1: "))
+    y_artery_1 = float(input("Enter the artery dimension in the y direction for v_1: "))
+    z_artery_1 = slice_thickness # Assume z to be equal to the slice thickness
+    x_artery_2 = float(input("Enter the artery dimension in the x direction for v_2: "))
+    y_artery_2 = float(input("Enter the artery dimension in the y direction for v_2: "))
+    z_artery_2 = slice_thickness # Assume z to be equal to the slice thickness
+
+    # Get x' and y'
+    x_prime = x_artery_1 + x_artery_2
+    y_prime = y_artery_1 + y_artery_2
+    print(f"Calculated x' = {x_prime}, and y' = {y_prime}")
+
+    # Choose the corresponding sphere depending on the artery size for x' and y'
+    if x_prime < 12:
+        mask_x_prime = masks[0]     # Choose the mask of the smallest sphere (10 mm diameter)
+    elif x_prime < 15:
+        mask_x_prime = masks[1]     # 13 mm diameter
+    elif x_prime < 19:
+        mask_x_prime = masks[2]     # 17 mm diameter
+    elif x_prime < 24:
+        mask_x_prime = masks[3]     # 22 mm diameter
+    # The x value will not be bigger than 24 mm
+
+    if y_prime < 12:
+        mask_y_prime = masks[0]     # Choose the mask of the smallest sphere (10 mm diameter)
+    elif y_prime < 15:
+        mask_y_prime = masks[1]     # 13 mm diameter
+    elif y_prime < 19:
+        mask_y_prime = masks[2]     # 17 mm diameter
+    elif y_prime < 24:
+        mask_y_prime = masks[3]     # 22 mm diameter
+    # The y value will not be bigger than 24 mm
+
+    if False:# Choose the corresponding line profile depending on artery size
+        if x_prime < 12:
+            profile_x = profiles[0]["profile_x"]    # Choose the line profile of the smallest sphere (10 mm diameter)
+        elif x_prime < 15:
+            profile_x = profiles[1]["profile_x"]    # Choose the line profile of the second smallest sphere (13 mm diameter)
+        elif x_prime < 19:
+            profile_x = profiles[2]["profile_x"]    # Choose the line profile of the third smallest sphere (17 mm diameter)
+        # The x value will not be bigger than 19 mm
+
+        if y_prime < 12:
+            profile_y = profiles[0]["profile_y"]    # Choose the line profile of the smallest sphere (10 mm diameter)
+        elif y_prime < 15:
+            profile_y = profiles[1]["profile_y"]    # Choose the line profile of the second smallest sphere (13 mm diameter)
+        elif y_prime < 19:
+            profile_y = profiles[2]["profile_y"]    # Choose the line profile of the third smallest sphere (17 mm diameter)
+        elif y_prime < 24:
+            profile_y = profiles[3]["profile_y"]    # Choose the line profile of the fourth smallest sphere (22 mm diameter)
+        # The y value will not be bigger than 24 mm
     
+    # The z value corresponds to the slice thickness, because the surrounding in z direction of the artery is always of the same hottnes
+    # Therefore, we choose the biggest sphere size and pretend that we only have the artery z-size == 2 mm (slice thickness), because
+    # then we get the best approximation of the artery profile
+    #profile_z = profiles[3]["profile_z"]    # Choose the line profile of the 22 mm sphere
+    mask_z_prime = masks[3]     # 22 mm diameter
+    
+
+    #print(f"Chosen masks for x': {mask_x_prime}")
+    # Calculate the recovery coefficient for this specific artery shape
+    #recovery_coefficient_correction_method_1(profile_x, profile_y, profile_z, x_artery, y_artery, z_artery)
+    #recovery_coefficient_correction_method_2(profile_x, profile_y, profile_z, x_artery_1, y_artery_1, z_artery_1, x_artery_2, y_artery_2, z_artery_2) 
+    recovery_coefficient_correction_method_3(mask_x_prime, mask_y_prime, mask_z_prime, x_artery_1, y_artery_1, z_artery_1, x_artery_2, y_artery_2, z_artery_2)
 
 def handle_recovery_coefficient_correction_full(profiles):
     # Named the method full, because I take the full expansion of the artery in x, and y direction
@@ -1368,7 +1461,57 @@ def handle_recovery_coefficient_correction_full(profiles):
     # Calculate the recovery coefficient for this specific artery shape
     #recovery_coefficient_correction_method_1(profile_x, profile_y, profile_z, x_artery, y_artery, z_artery)
     recovery_coefficient_correction_method_2(profile_x, profile_y, profile_z, x_artery_1, y_artery_1, z_artery_1, x_artery_2, y_artery_2, z_artery_2)
+
+def handle_recovery_coefficient_correction_full_spherical_VOI(masks):
+    # Named the method full, because I take the full expansion of the artery in x, and y direction
+    # as the basis to choose the corresponding line profile
+
+    global dicom_images
+    slice_thickness = dicom_images[0][0x0018, 0x0050].value
+
+    # Get the artery dimensioms in x, y, and z direction for the two vectors v_1 and v_2
+    x_artery_1 = float(input("\nEnter the artery dimension in the x direction for v_1: "))
+    y_artery_1 = float(input("Enter the artery dimension in the y direction for v_1: "))
+    z_artery_1 = slice_thickness # Assume z to be equal to the slice thickness
+    x_artery_2 = float(input("Enter the artery dimension in the x direction for v_2: "))
+    y_artery_2 = float(input("Enter the artery dimension in the y direction for v_2: "))
+    z_artery_2 = slice_thickness # Assume z to be equal to the slice thickness
+
+    # Get the full expansion of the artery in x, and y direction
+    x_full_expansion = float(input("Enter the full artery expansion in the x direction: "))
+    y_full_expansion = float(input("Enter the full artery expansion in the y direction: "))
+
+    # Choose the corresponding line profile depending on artery size
+    if x_full_expansion < 12:
+        masks_x_prime = masks[0]    # Choose the line profile of the smallest sphere (10 mm diameter)
+    elif x_full_expansion < 15:
+        masks_x_prime = masks[1]    # Choose the line profile of the second smallest sphere (13 mm diameter)
+    elif x_full_expansion < 19:
+        masks_x_prime = masks[2]    # Choose the line profile of the third smallest sphere (17 mm diameter)
+    elif x_full_expansion < 24:
+        masks_x_prime = masks[3]
+    # The x value will not be bigger than 19 mm
+
+    if y_full_expansion < 12:
+        masks_y_prime = masks[0]    # Choose the line profile of the smallest sphere (10 mm diameter)
+    elif y_full_expansion < 15:
+        masks_y_prime = masks[1]
+    elif y_full_expansion < 19:
+        masks_y_prime = masks[2]
+    elif y_full_expansion < 24:
+        masks_y_prime = masks[3]
+
+    # The y value will not be bigger than 24 mm
     
+    # The z value corresponds to the slice thickness, because the surrounding in z direction of the artery is always of the same hottnes
+    # Therefore, we choose the biggest sphere size and pretend that we only have the artery z-size == 2 mm (slice thickness), because
+    # then we get the best approximation of the artery profile
+    masks_z_prime = masks [3]   # Choose the line profile of the 22 mm sphere
+
+    # Calculate the recovery coefficient for this specific artery shape
+    #recovery_coefficient_correction_method_1(profile_x, profile_y, profile_z, x_artery, y_artery, z_artery)
+    recovery_coefficient_correction_method_4(masks_x_prime, masks_y_prime, masks_z_prime, x_artery_1, y_artery_1, z_artery_1, x_artery_2, y_artery_2, z_artery_2)
+
 def recovery_coefficient_correction_method_1(profile_x, profile_y, profile_z, x_artery, y_artery, z_artery):
     """
     Apply the recovery coefficient correction to the line profiles.
@@ -1484,6 +1627,107 @@ def recovery_coefficient_correction_method_2(profile_x, profile_y, profile_z, x_
 
     # Mean value of all RCs
     mean_rc = np.mean([recovery_coefficient_x_1, recovery_coefficient_y_1, recovery_coefficient_z_1, recovery_coefficient_x_2, recovery_coefficient_y_2, recovery_coefficient_z_2])
+    print(f"Mean Recovery Coefficient: {mean_rc:.4f}")
+
+def recovery_coefficient_correction_method_3(mask_x, mask_y, mask_z, x_artery_1, y_artery_1, z_artery_1, x_artery_2, y_artery_2, z_artery_2):
+    """
+    Use for the recovery coefficient correction not the line profiles, but the interpolated RC curves.
+    mask_x: Spherical VOI for the sphere which had the same sphere diameter as x'.
+    mask_y: Spherical VOI for the sphere which had the same sphere diameter as y'.
+    mask_z: Spherical VOI for the sphere which had the same sphere diameter as z'.
+    x_artery_1: mm size of the artery in x-direction for vector v_1 (float).
+    y_artery_1: mm size of the artery in y-direction for vector v_1 (float).
+    z_artery_1: mm size of the artery in z-direction for vector v_1 (float).
+    x_artery_2: mm size of the artery in x-direction for vector v_2 (float).
+    y_artery_2: mm size of the artery in y-direction for vector v_2 (float).
+    z_artery_2: mm size of the artery in z-direction for vector v_2 (float).
+    """
+    global dicom_images
+    slice_thickness = dicom_images[0][0x0018, 0x0050].value
+    pixel_spacing = dicom_images[0][0x0028, 0x0030].value[0]  # Assuming square pixels
+    # Interpolate the x, y, and z profiles to have better rc curve resolution.
+    # Before interpolation we only have 35 data points (amount of voxels in the line profile)
+    #profile_x = interpolate_lineprofile_cubic(profile_x, num_points=400)
+    #profile_y = interpolate_lineprofile_cubic(profile_y, num_points=400)
+    #profile_z = interpolate_lineprofile_cubic(profile_z, num_points=400)
+    # Get dicom images as a numpy array
+    image_stack = build_image_stack()
+    # Define the true_activity_concentration
+    true_activity_concentration = 26166.28  # Activity concentration at scan start for the first NEMA IQ scan from the 10.10.2024 [Bq/mL]
+    
+    rc_x = []
+    rc_y = []
+    rc_z = []
+    # Get the different spherical VOI masks and their corresponding RC values
+    for mask in mask_x:
+        # Ensure that mask is a boolean array
+        mask = mask.astype(bool)
+        #print(f"Mask: {mask}")
+        # Extract pixel values using the boolean mask
+        pixel_values = image_stack[mask]
+        rc_x_value = np.mean(pixel_values) / true_activity_concentration
+        rc_x.append(rc_x_value)
+    for mask in mask_y:
+        # Ensure that mask is a boolean array
+        mask = mask.astype(bool)
+        # Extract pixel values using the boolean mask
+        pixel_values = image_stack[mask]
+        rc_y_value = np.mean(pixel_values) / true_activity_concentration
+        rc_y.append(rc_y_value)
+    for mask in mask_z:
+        # Ensure that mask is a boolean array
+        mask = mask.astype(bool)
+        # Extract pixel values using the boolean mask
+        pixel_values = image_stack[mask]
+        rc_z_value = np.mean(pixel_values) / true_activity_concentration
+        rc_z.append(rc_z_value)
+
+    # Store original x-tick positions and labels
+    original_x_ticks = list(range(len(rc_x)))
+    original_x_labels = [f"{i}" for i in original_x_ticks]
+
+    # Interpolate the RC curves
+    number_of_points_interpolation = 400
+    rc_x = interpolate_lineprofile_cubic(rc_x, num_points=number_of_points_interpolation)
+    rc_y = interpolate_lineprofile_cubic(rc_y, num_points=number_of_points_interpolation)
+    rc_z = interpolate_lineprofile_cubic(rc_z, num_points=number_of_points_interpolation)    
+    # Convert voxel indices to mm
+    x_mm = np.linspace(0, 17 * pixel_spacing, number_of_points_interpolation)
+    
+
+    # Plot the RC curve 
+    plt.figure("RC Curves")
+    plt.plot(x_mm, rc_x, label='RC Curve x')
+    plt.plot(x_mm, rc_y, label='RC Curve y')
+    plt.plot(x_mm, rc_z, label='RC Curve z')
+    plt.title("RC Curves")
+    plt.xlabel("Spherical VOI size [mm]")
+    # Set the original x-ticks and labels before we interpolated the RC curves
+    #plt.xticks(ticks=np.linspace(0, 399, len(original_x_ticks)), labels=original_x_labels)
+    plt.ylabel("Recovery Coefficient")
+    plt.legend()
+    plt.show()
+
+    # Get the RC values of the 
+    # rc_x was in voxel size before we interpolated the RC curve
+    # x_artery_1 and so on are in mm size (float number)
+    # Therefore, we have to convert the interpolated curve to mm size
+    # Interpolate to find the RC values at the given artery sizes in mm
+    interpolate_rc_x = interp1d(x_mm, rc_x, kind='cubic')
+    interpolate_rc_y = interp1d(x_mm, rc_y, kind='cubic')
+    interpolate_rc_z = interp1d(x_mm, rc_z, kind='cubic')
+    rc_x_artery_1 = interpolate_rc_x(x_artery_1)
+    rc_x_artery_2 = interpolate_rc_x(x_artery_2)
+    rc_y_artery_1 = interpolate_rc_y(y_artery_1)
+    rc_y_artery_2 = interpolate_rc_y(y_artery_2)
+    rc_z_artery_1 = interpolate_rc_z(z_artery_1)
+    rc_z_artery_2 = interpolate_rc_z(z_artery_2)
+    print(f"RC value for x_artery_1 and _2: {rc_x_artery_1}, {rc_x_artery_2}")
+    print(f"RC value for y_artery_1 and _2: {rc_y_artery_1}, {rc_y_artery_2}")
+    print(f"RC value for z_artery_1 and _2: {rc_z_artery_1}, {rc_z_artery_2}")
+
+    # Mean value of all RCs
+    mean_rc = np.mean([rc_x_artery_1, rc_y_artery_1, rc_z_artery_1, rc_x_artery_2, rc_y_artery_2, rc_z_artery_2])
     print(f"Mean Recovery Coefficient: {mean_rc:.4f}")
 
 def interpolate_lineprofile_cubic(profile, num_points=200):
