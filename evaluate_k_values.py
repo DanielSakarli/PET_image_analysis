@@ -153,10 +153,10 @@ def create_boxplot(df, k_variables):
     plt.tight_layout()
     # Show the plot to the user
     plt.show(block=False)
-    save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Kinetic Modelling//Boxplots//AIF"
-    png_path = os.path.join(save_path, f'AIF_{model_name}_for_{region_name}_all_recon_settings.png')
-    pdf_path = os.path.join(save_path, f'AIF_{model_name}_for_{region_name}_all_recon_settings.pdf')
-    pickle_path = os.path.join(save_path, f'AIF_{model_name}_for_{region_name}_all_recon_settings.pickle')
+    save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Kinetic Modelling//Boxplots//IDIF one hottest pixel per slice"
+    png_path = os.path.join(save_path, f'IDIF_one_hottest_pixel_{model_name}_for_{region_name}_all_recon_settings.png')
+    pdf_path = os.path.join(save_path, f'IDIF_one_hottest_pixel_{model_name}_for_{region_name}_all_recon_settings.pdf')
+    pickle_path = os.path.join(save_path, f'IDIF_one_hottest_pixel_{model_name}_for_{region_name}_all_recon_settings.pickle')
     
     answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here:\n{save_path}\nas\n{png_path}?")
     if answer:
@@ -240,10 +240,20 @@ def create_lineplots(df, k_variables):
         plt.tight_layout()
         # Show the plot to the user
         plt.show(block=False)
-        save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Kinetic Modelling//Lineplots//AIF"
-        png_path = os.path.join(save_path, f'AIF_{model_name}_for_{region_name}_and_{k_variable}_variable_all_recon_settings.png')
-        pdf_path = os.path.join(save_path, f'AIF_{model_name}_for_{region_name}_and_{k_variable}_variable_all_recon_settings.pdf')
-        pickle_path = os.path.join(save_path, f'AIF_{model_name}_for_{region_name}_and_{k_variable}_variable_all_recon_settings.pickle')
+        if k_variable == "Flux":
+            plt.ylim(0, 0.1)
+        if k_variable == "K1":
+            plt.ylim(0, 0.5)
+        if k_variable == "k2":
+            plt.ylim(0, 0.5)
+        if k_variable == "k3":
+            plt.ylim(0, 0.2)
+        if k_variable == "k4":
+            plt.ylim(0, 0.05)
+        save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Kinetic Modelling//Lineplots//IDIF one hottest pixel per slice"
+        png_path = os.path.join(save_path, f'IDIF_one_hottest_pixel_{model_name}_for_{region_name}_and_{k_variable}_variable_all_recon_settings.png')
+        pdf_path = os.path.join(save_path, f'IDIF_one_hottest_pixel_{model_name}_for_{region_name}_and_{k_variable}_variable_all_recon_settings.pdf')
+        pickle_path = os.path.join(save_path, f'IDIF_one_hottest_pixel_{model_name}_for_{region_name}_and_{k_variable}_variable_all_recon_settings.pickle')
         
         answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here:\n{save_path}\nas\n{png_path}?")
         if answer:
@@ -258,7 +268,7 @@ def create_lineplots(df, k_variables):
 
 
 if __name__ == "__main__":
-    file_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Kinetic Modelling//All_patients_k_values_AIF.csv"
+    file_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Kinetic Modelling//All_patients_k_values_IDIF_one_hottest_pixel.csv"
     process_csv(file_path)
     
     if False:
