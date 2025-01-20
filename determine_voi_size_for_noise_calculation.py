@@ -25,7 +25,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
 import numpy as np
-from scipy import ndimage
+from scipy import ndimage, interpolate
 from matplotlib.colors import Normalize
 import pickle
 import concurrent.futures
@@ -835,8 +835,8 @@ def noise_vs_sphere_size():
         #centers = [(current_index, 212, 273), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]
         
         # NEMA IQ phantom centers for first scan from the 10.10.2024
-        centers = [(current_index, 210, 271), (current_index, 217, 228), (current_index, 256, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]
-
+        centers = [(current_index, 210, 271), (current_index, 218, 228), (current_index, 257, 214), (current_index, 289, 241), (current_index, 282, 282), (current_index, 242, 297)]            
+    
     # Centers of 6 3D spheres with a 344x344 image size, increasing sphere sizes
     # centers = [(0, 142, 183), (0, 146, 154), (0, 172, 144), (0, 194, 161), (0, 190, 189), (0, 165, 200)] 
     
@@ -1502,7 +1502,7 @@ def process_rois_for_predefined_centers(roi_or_voi = 'voi'):
     # to be the same as the actual sphere size. True: isocontour thresholding, False: define voi size as sphere size
     flag_thresholding = False
     # flag for the spherical RC_mean in all spheres (10 - 37 mm)
-    flag_spherical_RC_mean_all_spheres = False
+    flag_spherical_RC_mean_all_spheres = True
     # flag for the spherical RC_mean in the smallest sphere (10 mm)
     flag_spherical_RC_mean_in_small_sphere = False # To test VOI sizes for the lesion in the prostate (within the smallest sphere, surrounded by hot background)
     # flag for the cylindrical RC_mean in the smallest sphere (10 mm)
@@ -1512,14 +1512,14 @@ def process_rois_for_predefined_centers(roi_or_voi = 'voi'):
     # flag for the cylindrical RC_mean in background but close to hot sphere
     flag_cylindrical_RC_mean_in_background_close_to_hot_sphere = False # To test center line VOI for the muscle gluteus maximus (background in a PET scan)
     # flag for the spherical RC_mean in the background but close to hot sphere
-    flag_spherical_RC_mean_in_background_close_to_hot_sphere = True # To test VOI sizes for the muscle gluteus maximus (background in a PET scan)
+    flag_spherical_RC_mean_in_background_close_to_hot_sphere = False # To test VOI sizes for the muscle gluteus maximus (background in a PET scan)
 
     # Centers of 6 2D spheres with a 344x344 image size, increasing sphere sizes
     # centers = [(200, 165), (189, 190), (160, 194), (144, 171), (154, 146), (183, 142)] 
     # Centers for second scan in November
-    centers = [(current_index, 212, 273), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]
+    #centers = [(current_index, 212, 273), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]
     # Centers for first scan in October
-    #centers = [(current_index, 210, 271), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]            
+    centers = [(current_index, 210, 271), (current_index, 218, 229), (current_index, 257, 215), (current_index, 290, 242), (current_index, 282, 282), (current_index, 243, 298)]            
     if flag_cylindrical_RC_mean_in_background_close_to_hot_sphere or flag_spherical_RC_mean_in_background_close_to_hot_sphere:
         centers = [(current_index, 212, 265)]
 
@@ -1549,8 +1549,8 @@ def process_rois_for_predefined_centers(roi_or_voi = 'voi'):
         #    max(0, center[0] - radius):min(selected_slice.shape[0], center[0] + radius),
         #    max(0, center[1] - radius):min(selected_slice.shape[1], center[1] + radius)
         #])
-        #true_activity_concentration = 28136.08 #Calculated the theoretical activity at scan start (Daniel, 10. Oct. 2024 12:22 pm)
-        true_activity_concentration = 26166.28 #Calculated the theoretical activity at scan start (Daniel, 05. Nov. 2024 11:36 am)
+        true_activity_concentration = 28136.08 #Calculated the theoretical activity at scan start (Daniel, 10. Oct. 2024 12:22 pm)
+        #true_activity_concentration = 26166.28 #Calculated the theoretical activity at scan start (Daniel, 05. Nov. 2024 11:36 am)
         #threshold = 0.4 * true_activity_concentration #local_max
         if flag_spherical_RC_mean_all_spheres:
             center = centers[i] # take the center of all spheres
@@ -1695,8 +1695,8 @@ def plot_recovery_coefficients(recovery_coefficients=None, sphere_sizes=None):
         [15977.73, 26192.25, 30982.05, 30077.90, 31234.95, 31012.97], # NEMA_IQ_04_c
     ]
     '''
-    #true_activity_concentration = 28136.08 # calculated the activity with the measured injected_activity and the decay constant of F-18 (in Bq) at scan start
-    true_activity_concentration = 26166.28 # Calculated the theoretical activity at scan start (Daniel, 05. Nov. 2024 11:36 am) 
+    true_activity_concentration = 28136.08 # calculated the activity with the measured injected_activity and the decay constant of F-18 (in Bq) at scan start
+    #true_activity_concentration = 26166.28 # Calculated the theoretical activity at scan start (Daniel, 05. Nov. 2024 11:36 am) 
     # activity_conc_at_scan_end = 25593.21
     # take the true activtiy concentration as the average of the activity concentration at the start and end of the scan
     # reason: can't decay-correct as usual since it is a static image and not a dynamic one
@@ -1736,7 +1736,7 @@ def plot_recovery_coefficients(recovery_coefficients=None, sphere_sizes=None):
     # Add labels and legend
     plt.xlabel('Spherical VOI Diameter [mm]')
     plt.ylabel('Recovery Coefficient [%]')
-    plt.title('Recovery Coefficients in background close to 10 mm Hot Sphere calculated with c$_{mean}$') #SUV$_{40}$
+    plt.title('Recovery Coefficients Calculated with c$_{mean}$') #SUV$_{40}$
     plt.legend()
     plt.grid(True)
     plt.xticks(sphere_sizes)  # Set x-ticks to the exact sphere sizes
@@ -1746,9 +1746,9 @@ def plot_recovery_coefficients(recovery_coefficients=None, sphere_sizes=None):
     plt.show(block=False)
     iteration_count += 1
     save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Recovery Coefficients"
-    png_path = os.path.join(save_path, 'NEMA_IQ_01_08_rc_calculated_with_SUV_mean_and_spherical_VOI_in_hot_background_close_to_10mm_sphere_vs_VOI_sizes.png')
-    pdf_path = os.path.join(save_path, 'NEMA_IQ_01_08_rc_calculated_with_SUV_mean_and_spherical_VOI_in_hot_background_close_to_10mm_sphere_vs_VOI_sizes.pdf')
-    pickle_path = os.path.join(save_path, 'NEMA_IQ_01_08_rc_calculated_with_SUV_mean_and_spherical_VOI_in_hot_background_close_to_10mm_sphere_vs_VOI_sizes.pickle')
+    png_path = os.path.join(save_path, 'testNEMA_IQ_04_rc_calculated_with_SUV_mean_VOI_vs_sphere_size_without_background.png')
+    pdf_path = os.path.join(save_path, 'testNEMA_IQ_04_rc_calculated_with_SUV_mean_VOI_vs_sphere_size_without_background.pdf')
+    pickle_path = os.path.join(save_path, 'testNEMA_IQ_04_rc_calculated_with_SUV_mean_VOI_vs_sphere_size_without_background.pickle')
     
     answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here:\n{save_path}\nas\n{png_path}?")
     if answer:
@@ -1760,6 +1760,11 @@ def plot_recovery_coefficients(recovery_coefficients=None, sphere_sizes=None):
 
     # Show the plot again to ensure it remains visible
     plt.show() 
+    # Interpolate the recovery curve
+    interpolated_curve = interpolate.interp1d(sphere_sizes, recovery_coefficients, kind='cubic')
+    # Plot the interpolated recovery curve
+    plt.figure('Interpolated Recovery Curve')
+    plt.plot(interpolated_curve)
 
     #plt.show()  # Show the plot and block interaction until closed
     #plt.close(fig)  # Ensure the figure is closed after displaying

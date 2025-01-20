@@ -709,8 +709,8 @@ def get_mean_value(image_stack, mask):
     return np.mean(pixel_values)
 
 def calculate_SUV_N():
-    #process_rois_for_predefined_centers('roi') # initialize the 2D ROI mask
-    #suv_peak_values = suv_peak_with_spherical_voi() # Get the SUV_peak with 2D ROI mask (3D is computationally too expensive)
+    process_rois_for_predefined_centers('roi') # initialize the 2D ROI mask
+    suv_peak_values = suv_peak_with_spherical_voi() # Get the SUV_peak with 2D ROI mask (3D is computationally too expensive)
     process_rois_for_predefined_centers('voi') # update the 2D ROI mask to be a 3D VOI mask for SUV_N calculation
     global dicom_images, current_index, roi_masks, iteration_count, loaded_folder_path
     sphere_sizes = [10, 13, 17, 22, 28, 37]  # Sphere sizes
@@ -740,7 +740,7 @@ def calculate_SUV_N():
                 print(f"SUV_{N} for sphere size {sphere_size} mm: {mean_top_N:.2f} Bq/mL")
 
         # Update plot
-        load_more_data = plot_SUV_N(sphere_sizes, results) # , suv_peak_values)
+        load_more_data = plot_SUV_N(sphere_sizes, results, suv_peak_values) # , suv_peak_values)
         if not load_more_data:
             break
         # More data to plot
@@ -834,19 +834,40 @@ def plot_SUV_N(sphere_sizes, results, suv_peak_values):
     plt.figure('SUV$_{N}$ Plot')
     for sphere_size in sphere_sizes:
         plt.plot(range(0, 50, 5), results[sphere_size], marker='o', label=f'Sphere size: {sphere_size} mm')
-    plt.xlabel('Mode of SUV')
-    plt.ylabel(r'$\Delta$SUV [%]')
-    plt.title('Different Modes of SUV')
+   
     plt.xticks(range(0, 50, 5), x_labels)  # Set x-ticks to the defined labels
     plt.legend()
+    
+    # Plot the abs_sum values against the x_labels
+    plt.figure('Summed Absolute Error Plot')
+    plt.plot(range(num_values), abs_sums, marker='o')
+    plt.xlabel('Type of Delineation')
+    plt.ylabel(r'Summed Absolute $\Delta$c [%]')
+    plt.title('Delineation Type Dependent Error')
+    plt.xticks(range(num_values), x_labels)  # Set x-ticks to the defined labels
+    plt.ylim(90, 180)
     plt.grid(True)
-    parent_directory = os.path.dirname(loaded_folder_path)
-    png_path = os.path.join(parent_directory, 'SUV_N_plot.png')
-    pickle_path = os.path.join(parent_directory, 'SUV_N_plot.pickle')
-    plt.savefig(png_path)
-    with open(pickle_path, 'wb') as f:
-        pickle.dump(plt.gcf(), f)
-    plt.show()
+    # Show the plot to the user
+    plt.show(block=False)
+
+    save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//deltaSUV_vs_SUV_mode"
+    answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here: {save_path}?")
+    if answer: 
+        # Save the plot as PNG, PDF, and pickle files
+        png_path = os.path.join(save_path, 'C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//deltaSUV_vs_SUV_mode//NEMA_IQ_01-08_Summed_Absolute_Error_Plot.png')
+        pdf_path = os.path.join(save_path, 'C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//deltaSUV_vs_SUV_mode//NEMA_IQ_01-08_Summed_Absolute_Error_Plot.pdf')
+        pickle_path = os.path.join(save_path, 'C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//deltaSUV_vs_SUV_mode//NEMA_IQ_01-08_Summed_Absolute_Error_Plot.pickle')
+        
+        plt.savefig(png_path)
+        plt.savefig(pdf_path)
+        with open(pickle_path, 'wb') as f:
+            pickle.dump(plt.gcf(), f)
+    # Ask user to load more data or not
+    #answer = messagebox.askyesno("Load More Data", "Do you want to load more data?")
+    #if answer:
+    #    load_folder()
+    # Show the plot again to ensure it remains visible
+    plt.show() 
     #plt.show()
     # Ask user to load more data or not
     answer = messagebox.askyesno("Load More Data", "Do you want to load more data?")
@@ -859,23 +880,15 @@ def plot_SUV_N(sphere_sizes, results, suv_peak_values):
         # Plot the abs_sum values against the x_labels
         plt.figure('Summed Absolute Error Plot')
         plt.plot(range(num_values), abs_sums, marker='o')
-        plt.xlabel('Mode of SUV')
-        plt.ylabel(r'Summed Absolute $\Delta$SUV [%]')
-        plt.title('SUV Mode Dependent Error')
+        plt.xlabel('Type of Delineation')
+        plt.ylabel(r'Summed Absolute $\Delta$c [%]')
+        plt.title('Delineation Type Dependent Error')
         plt.xticks(range(num_values), x_labels)  # Set x-ticks to the defined labels
         plt.ylim(90, 180)
         plt.grid(True)
 
         # Add legend with the iteration counter in the title and entries
         plt.legend(legend_entries, title=f'Number of iterations: ')
-
-
-        png_path = os.path.join(parent_directory, 'SUV_mode_dependent_error.png')
-        pickle_path = os.path.join(parent_directory, 'SUV_mode_dependent_error.pickle')
-        plt.savefig(png_path)
-        with open(pickle_path, 'wb') as f:
-            pickle.dump(plt.gcf(), f)
-        plt.show()
 
         return False
     else:
@@ -916,7 +929,7 @@ def suv_peak_with_spherical_voi():
     max_values_per_slice = {z: {'max_mean': 0, 'position': None} for z in range(image_stack.shape[0])}
     def process_index(index):
         z, y, x = index
-        if can_place_sphere(index, radius_pixels, roi_masks_array):
+        if can_place_sphere(index, radius_pixels):
             mask = create_3d_spherical_mask(index, radius_pixels, image_stack.shape)
             mean_value = get_mean_value(image_stack, mask)
             return z, mean_value, (y, x)
@@ -1154,10 +1167,13 @@ def process_rois_for_predefined_centers(roi_or_voi = 'roi'):
     # centers = [(200, 165), (189, 190), (160, 194), (144, 171), (154, 146), (183, 142)] 
     if roi_or_voi == 'roi':
         # Centers of 6 2D spheres with a 512x512 image size, increasing sphere sizes
-        centers = [(current_index, 212, 273), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]
+        #centers = [(current_index, 212, 273), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]
+        centers = [(current_index, 210, 271), (current_index, 217, 228), (current_index, 257, 214), (current_index, 289, 241), (current_index, 282, 282), (current_index, 242, 298)]
     else:
         # Centers of 6 3D spheres with a 512x512 image size, increasing sphere sizes
-        centers = [(current_index, 212, 273), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]
+        #centers = [(current_index, 212, 273), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]
+        centers = [(current_index, 210, 271), (current_index, 217, 228), (current_index, 257, 214), (current_index, 289, 241), (current_index, 282, 282), (current_index, 242, 298)]
+    
     radius = 15  # Covers even the biggest sphere with a diameter of 18.5 pixels (times approx. 2 mm pixel_spacing = 37 mm sphere)
     roi_masks = []
     # roi_pixels = []  # Initialize roi_pixels as an empty list

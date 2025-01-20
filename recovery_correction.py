@@ -892,15 +892,15 @@ def noise_vs_sphere_size():
     #roi_masks = masks # Save the 3D masks in global roi_masks to display them later on
     
     # Handle RC correction with spherical VOIs
-    #handle_recovery_coefficient_correction_coordinate_shift_spherical_VOI(masks)
-    handle_recovery_coefficient_correction_full_spherical_VOI(masks)
+    handle_recovery_coefficient_correction_coordinate_shift_spherical_VOI(masks)
+    #handle_recovery_coefficient_correction_full_spherical_VOI(masks)
 
     ir_values = get_ir_value(masks, sphere_sizes) 
     std_values = get_std_values(image_stack, masks, sphere_sizes) #If get_ir_value is commented out: include iteration_count += 1 in get_std_values
     
     print(f"IR values: {ir_values}")
     
-    #ture_activity_concentration = 28136.08 # calculated the activity with the measured injected_activity and the decay constant of F-18 (in Bq)
+    #true_activity_concentration = 28136.08 # calculated the activity with the measured injected_activity and the decay constant of F-18 (in Bq)
     true_activity_concentration = 26166.28 # [Bq/mL]. Scan from the 05.11.2024, scan start: 11:36:57 am
 
     # take the true activtiy concentration as the average of the activity concentration at the start and end of the scan
@@ -1349,18 +1349,21 @@ def handle_recovery_coefficient_correction_coordinate_shift_spherical_VOI(masks)
     global dicom_images
     slice_thickness = dicom_images[0][0x0018, 0x0050].value
 
-    # Get the artery dimensioms in x, y, and z direction for the two vectors v_1 and v_2
-    x_artery_1 = float(input("\nEnter the artery dimension in the x direction for v_1: "))
-    y_artery_1 = float(input("Enter the artery dimension in the y direction for v_1: "))
-    z_artery_1 = slice_thickness # Assume z to be equal to the slice thickness
-    x_artery_2 = float(input("Enter the artery dimension in the x direction for v_2: "))
-    y_artery_2 = float(input("Enter the artery dimension in the y direction for v_2: "))
-    z_artery_2 = slice_thickness # Assume z to be equal to the slice thickness
+    if False:
+        # Get the artery dimensioms in x, y, and z direction for the two vectors v_1 and v_2
+        x_artery_1 = float(input("\nEnter the artery dimension in the x direction for v_1: "))
+        y_artery_1 = float(input("Enter the artery dimension in the y direction for v_1: "))
+        z_artery_1 = slice_thickness # Assume z to be equal to the slice thickness
+        x_artery_2 = float(input("Enter the artery dimension in the x direction for v_2: "))
+        y_artery_2 = float(input("Enter the artery dimension in the y direction for v_2: "))
+        z_artery_2 = slice_thickness # Assume z to be equal to the slice thickness
 
-    # Get x' and y'
-    x_prime = x_artery_1 + x_artery_2
-    y_prime = y_artery_1 + y_artery_2
-    print(f"Calculated x' = {x_prime}, and y' = {y_prime}")
+        # Get x' and y'
+        x_prime = x_artery_1 + x_artery_2
+        y_prime = y_artery_1 + y_artery_2
+        print(f"Calculated x' = {x_prime}, and y' = {y_prime}")
+    x_prime = float(input("\nEnter the big diameter of the artery: "))
+    y_prime = float(input("\nEnter the small diameter of the artery: "))
 
     # Choose the corresponding sphere depending on the artery size for x' and y'
     if x_prime < 12:
@@ -1407,13 +1410,14 @@ def handle_recovery_coefficient_correction_coordinate_shift_spherical_VOI(masks)
     # then we get the best approximation of the artery profile
     #profile_z = profiles[3]["profile_z"]    # Choose the line profile of the 22 mm sphere
     mask_z_prime = masks[3]     # 22 mm diameter
-    
+    z_prime = slice_thickness # Assume z to be equal to the slice thickness
 
     #print(f"Chosen masks for x': {mask_x_prime}")
     # Calculate the recovery coefficient for this specific artery shape
     #recovery_coefficient_correction_method_1(profile_x, profile_y, profile_z, x_artery, y_artery, z_artery)
     #recovery_coefficient_correction_method_2(profile_x, profile_y, profile_z, x_artery_1, y_artery_1, z_artery_1, x_artery_2, y_artery_2, z_artery_2) 
-    recovery_coefficient_correction_method_3(mask_x_prime, mask_y_prime, mask_z_prime, x_artery_1, y_artery_1, z_artery_1, x_artery_2, y_artery_2, z_artery_2)
+    #recovery_coefficient_correction_method_3(mask_x_prime, mask_y_prime, mask_z_prime, x_artery_1, y_artery_1, z_artery_1, x_artery_2, y_artery_2, z_artery_2)
+    recovery_coefficient_correction_method_4(mask_x_prime, mask_y_prime, mask_z_prime, x_prime, y_prime, z_prime)
 
 def handle_recovery_coefficient_correction_full(profiles):
     # Named the method full, because I take the full expansion of the artery in x, and y direction
@@ -1552,7 +1556,7 @@ def recovery_coefficient_correction_method_1(profile_x, profile_y, profile_z, x_
     mean_3d_artery = np.mean(profile_3d_artery)
 
     # Define the true_activity_concentration
-    true_activity_concentration = 26166.28  # Activity concentration at scan start for the first NEMA IQ scan from the 10.10.2024 [Bq/mL]
+    true_activity_concentration = 28136.08  # Activity concentration at scan start for the first NEMA IQ scan from the 10.10.2024 [Bq/mL]
 
     # Calculate the recovery coefficients
     recovery_coefficient_2d = mean_2d_artery / true_activity_concentration
@@ -1608,7 +1612,7 @@ def recovery_coefficient_correction_method_2(profile_x, profile_y, profile_z, x_
     mean_z_artery_2 = np.mean(profile_z_artery_2)
 
     # Define the true_activity_concentration
-    true_activity_concentration = 26166.28  # Activity concentration at scan start for the first NEMA IQ scan from the 10.10.2024 [Bq/mL]
+    true_activity_concentration = 28136.08  # Activity concentration at scan start for the first NEMA IQ scan from the 10.10.2024 [Bq/mL]
 
     # Calculate the recovery coefficients
     recovery_coefficient_x_1 = mean_x_artery_1 / true_activity_concentration
@@ -1653,7 +1657,7 @@ def recovery_coefficient_correction_method_3(mask_x, mask_y, mask_z, x_artery_1,
     # Get dicom images as a numpy array
     image_stack = build_image_stack()
     # Define the true_activity_concentration
-    true_activity_concentration = 26166.28  # Activity concentration at scan start for the first NEMA IQ scan from the 10.10.2024 [Bq/mL]
+    true_activity_concentration = 28136.08  # Activity concentration at scan start for the first NEMA IQ scan from the 10.10.2024 [Bq/mL]
     
     rc_x = []
     rc_y = []
@@ -1728,6 +1732,108 @@ def recovery_coefficient_correction_method_3(mask_x, mask_y, mask_z, x_artery_1,
 
     # Mean value of all RCs
     mean_rc = np.mean([rc_x_artery_1, rc_y_artery_1, rc_z_artery_1, rc_x_artery_2, rc_y_artery_2, rc_z_artery_2])
+    print(f"Mean Recovery Coefficient: {mean_rc:.4f}")
+
+def recovery_coefficient_correction_method_4(mask_x, mask_y, mask_z, x_prime, y_prime, z_prime):
+    """
+    Use for the recovery coefficient correction not the line profiles, but the interpolated RC curves. 
+    Don't use the separate x_1, and x_2 values, but x_prime.
+    mask_x: Spherical VOI for the sphere which had the same sphere diameter as x'.
+    mask_y: Spherical VOI for the sphere which had the same sphere diameter as y'.
+    mask_z: Spherical VOI for the sphere which had the same sphere diameter as z'.
+    x_prime: biggest diamater of the artery in mm, equals to length of v_1 (float).
+    y_prime: smallest diameter of the artery in mm, equals to length of v_2 (float).
+    """
+    global dicom_images
+    slice_thickness = dicom_images[0][0x0018, 0x0050].value
+    pixel_spacing = dicom_images[0][0x0028, 0x0030].value[0]  # Assuming square pixels
+    # Interpolate the x, y, and z profiles to have better rc curve resolution.
+    # Before interpolation we only have 35 data points (amount of voxels in the line profile)
+    #profile_x = interpolate_lineprofile_cubic(profile_x, num_points=400)
+    #profile_y = interpolate_lineprofile_cubic(profile_y, num_points=400)
+    #profile_z = interpolate_lineprofile_cubic(profile_z, num_points=400)
+    # Get dicom images as a numpy array
+    image_stack = build_image_stack()
+    # Define the true_activity_concentration
+    true_activity_concentration = 28136.08  # Activity concentration at scan start for the first NEMA IQ scan from the 10.10.2024 [Bq/mL]
+    # Divide the prime values through 2, because they are in diameter while the RC curves start in the center of the spheres and go out (therefore in radius)
+    x_prime /= 2
+    y_prime /= 2
+    z_prime /= 2
+    
+    rc_x = []
+    rc_y = []
+    rc_z = []
+    # Get the different spherical VOI masks and their corresponding RC values
+    for mask in mask_x:
+        # Ensure that mask is a boolean array
+        mask = mask.astype(bool)
+        #print(f"Mask: {mask}")
+        # Extract pixel values using the boolean mask
+        pixel_values = image_stack[mask]
+        rc_x_value = np.mean(pixel_values) / true_activity_concentration
+        rc_x.append(rc_x_value)
+
+    for mask in mask_y:
+        # Ensure that mask is a boolean array
+        mask = mask.astype(bool)
+        # Extract pixel values using the boolean mask
+        pixel_values = image_stack[mask]
+        rc_y_value = np.mean(pixel_values) / true_activity_concentration
+        rc_y.append(rc_y_value)
+
+    for mask in mask_z:
+        # Ensure that mask is a boolean array
+        mask = mask.astype(bool)
+        # Extract pixel values using the boolean mask
+        pixel_values = image_stack[mask]
+        rc_z_value = np.mean(pixel_values) / true_activity_concentration
+        rc_z.append(rc_z_value)
+
+    # Store original x-tick positions and labels
+    original_x_ticks = list(range(len(rc_x)))
+    original_x_labels = [f"{i}" for i in original_x_ticks]
+
+    # Interpolate the RC curves
+    number_of_points_interpolation = 400
+    rc_x = interpolate_lineprofile_cubic(rc_x, num_points=number_of_points_interpolation)
+    rc_y = interpolate_lineprofile_cubic(rc_y, num_points=number_of_points_interpolation)
+    rc_z = interpolate_lineprofile_cubic(rc_z, num_points=number_of_points_interpolation)    
+    # Convert voxel indices to mm
+    x_mm = np.linspace(0, 17 * pixel_spacing, number_of_points_interpolation)
+    
+
+    # Plot the RC curve 
+    plt.figure("RC Curves")
+    plt.plot(x_mm, rc_x, label='RC Curve x')
+    plt.plot(x_mm, rc_y, label='RC Curve y')
+    plt.plot(x_mm, rc_z, label='RC Curve z')
+    plt.title("RC Curves")
+    plt.xlabel("Spherical VOI size [mm]")
+    # Set the original x-ticks and labels before we interpolated the RC curves
+    #plt.xticks(ticks=np.linspace(0, 399, len(original_x_ticks)), labels=original_x_labels)
+    plt.ylabel("Recovery Coefficient")
+    plt.legend()
+    plt.show()
+
+    # Get the RC values of the 
+    # rc_x was in voxel size before we interpolated the RC curve
+    # x_artery_1 and so on are in mm size (float number)
+    # Therefore, we have to convert the interpolated curve to mm size
+    # Interpolate to find the RC values at the given artery sizes in mm
+    interpolate_rc_x = interp1d(x_mm, rc_x, kind='cubic')
+    interpolate_rc_y = interp1d(x_mm, rc_y, kind='cubic')
+    interpolate_rc_z = interp1d(x_mm, rc_z, kind='cubic')
+    rc_x_artery = interpolate_rc_x(x_prime)
+    rc_y_artery = interpolate_rc_y(y_prime)
+    rc_z_artery = interpolate_rc_z(z_prime)
+    
+    print(f"RC value for x_artery: {rc_x_artery}")
+    print(f"RC value for y_artery: {rc_y_artery}")
+    print(f"RC value for z_artery: {rc_z_artery}")
+
+    # Mean value of all RCs
+    mean_rc = np.mean([rc_x_artery, rc_y_artery, rc_z_artery])
     print(f"Mean Recovery Coefficient: {mean_rc:.4f}")
 
 def interpolate_lineprofile_cubic(profile, num_points=200):
