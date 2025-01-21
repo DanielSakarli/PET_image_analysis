@@ -31,7 +31,7 @@ import pickle
 import concurrent.futures
 #from tqdm import tqdm
 from scipy.interpolate import interp1d
-
+import seaborn as sns
 
 # Initialize global variables
 rgb_image = None
@@ -1836,6 +1836,79 @@ def recovery_coefficient_correction_method_4(mask_x, mask_y, mask_z, x_prime, y_
     mean_rc = np.mean([rc_x_artery, rc_y_artery, rc_z_artery])
     print(f"Mean Recovery Coefficient: {mean_rc:.4f}")
 
+def recovery_coefficient_correction_method_5():
+    """
+    Get the interpolated recovery curve from the csv file and check which Recovery Coefficient the iliac artery
+    diameter would have.
+    """
+
+    
+    # Load the interpolated recovery curve from the csv file
+    csv_path = r"C:\Users\DANIE\OneDrive\FAU\Master Thesis\Project\Data\RC Correction\interpolated_rc_curve_4i_no_background.csv"
+    rc_curve = np.loadtxt(csv_path, delimiter=";", skiprows=1)
+    x_data, y_data = rc_curve[:, 0], rc_curve[:, 1]
+
+    # Get the iliac artery diameters
+    x_prime = float(input("\nEnter the big diameter of the artery in mm: "))
+    y_prime = float(input("\nEnter the small diameter of the artery in mm: "))
+
+    # Interpolate the RC curve
+    interp_func = interp1d(x_data, y_data, kind='cubic', fill_value="extrapolate")
+
+    # Get the RC value for x_prime, y_prime
+    rc_x_prime = interp_func(x_prime)
+    rc_y_prime = interp_func(y_prime)
+
+    # Calculate the mean RC value
+    rc_mean = round(np.mean([rc_x_prime, rc_y_prime]), 2)
+
+    # Find the x-coordinate on the interpolated curve that corresponds to rc_mean
+    x_interp = np.linspace(min(x_data), max(x_data), 500)
+    y_interp = interp_func(x_interp)
+    x_mean = x_interp[np.argmin(np.abs(y_interp - rc_mean))]
+
+    # Plot the RC curve using Seaborn
+    plt.figure("RC Curve")
+    sns.lineplot(x=x_data, y=y_data, color="red", label='RC curve')
+    plt.scatter([x_prime, y_prime], [rc_x_prime, rc_y_prime], color='red', zorder=5)
+    plt.scatter([x_mean], [rc_mean], color='blue', zorder=5, label=f'$rc_{{mean}} = {rc_mean:.2f}$')
+    plt.axvline(x=x_prime, color='black', linestyle='--', label=f'x\' = {x_prime} mm')
+    plt.axvline(x=y_prime, color='black', linestyle='--', label=f'y\' = {y_prime} mm')
+    plt.text(x_prime - 0.5, rc_x_prime + 1.2, f'{rc_x_prime:.2f}', color='red', fontsize=10, ha='right')
+    plt.text(y_prime - 0.5, rc_y_prime + 1.2, f'{rc_y_prime:.2f}', color='red', fontsize=10, ha='right')
+    plt.text(x_mean - 0.5, rc_mean + 1.2, f'{rc_mean:.2f}', color='blue', fontsize=10, ha='right')
+    plt.title("Interpolated RC Curve, 4i, No Background", fontsize=14)
+    plt.xlabel("Spherical VOI size [mm]", fontsize=13)
+    plt.ylabel("Recovery Coefficient [%]", fontsize=13)
+    plt.ylim([0, 100])
+    plt.xlim([0, 40])
+    plt.legend()
+
+    print(f"RC value for x_prime ({x_prime} mm): {rc_x_prime}")
+    print(f"RC value for y_prime ({y_prime} mm): {rc_y_prime}")
+    print(f"Mean RC value: {rc_mean}")
+
+    # Show the plot to the user
+    plt.show(block=False)
+    save_path = r"C:\Users\DANIE\OneDrive\FAU\Master Thesis\Project\Data\RC Correction"
+    png_path = os.path.join(save_path, 'PSMA007_no_background_method_5.png')
+    pdf_path = os.path.join(save_path, 'PSMA007_no_background_method_5.pdf')
+    pickle_path = os.path.join(save_path, 'PSMA007_no_background_method_5.pickle')
+    
+    answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here:\n{save_path}\nas\n{png_path}?")
+    if answer:
+        # Save the plot as PNG, PDF, and pickle files
+        plt.savefig(png_path)
+        plt.savefig(pdf_path)
+        with open(pickle_path, 'wb') as f:
+            pickle.dump(plt.gcf(), f)
+
+    # Show the plot again to ensure it remains visible
+    plt.show()
+
+
+
+
 def interpolate_lineprofile_cubic(profile, num_points=200):
     """
     Interpolates a 1D line profile to have a specified number of points using cubic spline.
@@ -2497,12 +2570,18 @@ def create_gui():
     # VOI Processing Button
     process_voi_button = tk.Button(root, text="Isocontour detection", command=process_rois_for_predefined_centers)
     process_voi_button.pack(side=tk.LEFT, padx=20, pady=10)
+    
     # Get Image Roughness Plot
     get_image_roughness_button = tk.Button(root, text="Get Image Roughness", command=get_ir_value)
     get_image_roughness_button.pack(side=tk.LEFT, padx=20, pady=10)
+    
     # Draw RC Button
     draw_recovery_coefficients_button = tk.Button(root, text="Draw Recovery Coefficients", command=plot_recovery_coefficients)
     draw_recovery_coefficients_button.pack(side=tk.LEFT, padx=25, pady=10)
+
+    # Calculate RC Correction Button
+    calculate_rc_correction_button = tk.Button(root, text="Calculate RC Correction", command=recovery_coefficient_correction_method_5)
+    calculate_rc_correction_button.pack(side=tk.LEFT, padx=25, pady=10)
 
     # Show Plot Button
     show_plot_button = tk.Button(root, text="Show Plot", command=show_plot)

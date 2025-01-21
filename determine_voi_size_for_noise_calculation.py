@@ -47,7 +47,7 @@ recovery_coefficients = []
 # Initialize global variables
 dicom_images = []  # List to store DICOM images
 current_index = 0  # Current slice index
-
+background_mean_values = [] # List to store the background activity conc. according to NEMA standard
 
 # Function to load DICOM images from a directory
 def load_dicom_images(directory):
@@ -209,7 +209,7 @@ def previous_slice():
 
 # Calculate background variability according to NEMA NU 2-2007
 def background_variability(current_index):
-    global roi_pixels, rois, dicom_images
+    global roi_pixels, rois, dicom_images, background_mean_values
 
     sphere_sizes = [10, 13, 17, 22, 28, 37]  # Sphere sizes in mm
     # Extract slice_thickness using the DICOM tag's hexadecimal code
@@ -314,6 +314,9 @@ def background_variability(current_index):
         else:
             print(f"Average value for ROI size {size} mm: None")
 
+    # Save the final average background values in global variable, for later access in the recovery calculation
+    background_mean_values = final_mean_values
+
     # Calculate standard deviation according to NEMA NU 2-2007
     K = 60 # Number of background ROIs
     
@@ -356,7 +359,8 @@ def select_slice():
     selected_slice = dicom_images[current_index]
     save_selected_slice(selected_slice)
     background_variability(current_index)
-    process_rois_for_predefined_centers('roi') # initialize the 2D ROI mask
+    process_rois_for_predefined_centers('voi') # initialize the 3D VOI mask
+    #process_rois_for_predefined_centers('roi') # initialize the 2D ROI mask
     suv_peak_with_spherical_voi() # Get the SUV_peak with 2D ROI mask (3D is computationally too expensive)
     
 
@@ -1486,7 +1490,7 @@ def create_isocontour_voi_3d(img_array, center, radius, threshold):
 
 
 def process_rois_for_predefined_centers(roi_or_voi = 'voi'):
-    global roi_masks, current_index, SUV_max_values
+    global roi_masks, current_index, SUV_max_values, background_mean_values
     image_stack = build_image_stack()
     shape = image_stack.shape
     selected_slice = image_stack[current_index]
@@ -1519,7 +1523,7 @@ def process_rois_for_predefined_centers(roi_or_voi = 'voi'):
     # Centers for second scan in November
     #centers = [(current_index, 212, 273), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]
     # Centers for first scan in October
-    centers = [(current_index, 210, 271), (current_index, 218, 229), (current_index, 257, 215), (current_index, 290, 242), (current_index, 282, 282), (current_index, 243, 298)]            
+    centers = [(current_index, 210, 271), (current_index, 218, 229), (current_index, 257, 214), (current_index, 290, 241), (current_index, 282, 283), (current_index, 243, 298)]            
     if flag_cylindrical_RC_mean_in_background_close_to_hot_sphere or flag_spherical_RC_mean_in_background_close_to_hot_sphere:
         centers = [(current_index, 212, 265)]
 
@@ -1636,12 +1640,14 @@ def process_rois_for_predefined_centers(roi_or_voi = 'voi'):
  
     # Calculate the recovery coefficient of the different ROIs using the stored mean values
     #print(f"True activity: {true_activity_concentration:.2f}")
+    print("Background mean values: ", background_mean_values)
     for i, mean_value in enumerate(mean_values):
-        recovery_coefficient = 100 * mean_value / true_activity_concentration
+        print(f"Mean value in background for VOI {i + 1}: {background_mean_values[i]:.2f}")
+        recovery_coefficient = ((100 * mean_value - background_mean_values[i]) / true_activity_concentration) + background_mean_values[i]
         recovery_coefficients.append(recovery_coefficient)
         #print(f"Recovery coefficient for VOI {i + 1}: {recovery_coefficient:.2f}")
-
-
+    print(f"Length of recovery coefficients: {len(recovery_coefficients)}")
+    print("RC: ", recovery_coefficients)
     # Ensure the length of voi_sizes matches the length of recovery_coefficients
     #if len(voi_sizes) != len(recovery_coefficients):
     #    raise ValueError("The length of VOI numbers does not match the length of recovery coefficients.")
@@ -1714,7 +1720,7 @@ def plot_recovery_coefficients(recovery_coefficients=None, sphere_sizes=None):
         ]
         recovery_coefficients = [[100 * value / true_activity_concentration for value in row] for row in SUV_N]
     #legend_entries = ['4i, Gauss 3x3', '4i, Gauss 5x5', '4i, Gauss 7x7']
-    legend_entries = ['1 iteration', '2 iterations', '3 iterations', '4 iterations', '5 iterations', '6 iterations', '7 iterations', '8 iterations']
+    legend_entries = ['4 iterations', '2 iterations', '3 iterations', '4 iterations', '5 iterations', '6 iterations', '7 iterations', '8 iterations']
     # Define line styles
     #line_styles = ['-', '--', '-.', '-', '--', '-.', '-', '--', '-.']
     #line_styles = ['-', '--', '-', '--', '-', '--']
@@ -1731,12 +1737,12 @@ def plot_recovery_coefficients(recovery_coefficients=None, sphere_sizes=None):
     # Plot each SUV array against the voi_sizes
     plt.figure('Recovery Coefficients')
     #for recovery_coefficient in recovery_coefficients:
-    plt.plot(sphere_sizes, recovery_coefficients, marker='o', label=legend_entries[iteration_count]) # , linestyle=line_styles[i], color=colors[i], 
+    plt.plot(sphere_sizes, recovery_coefficients, marker='o', color='red', label=legend_entries[iteration_count]) # , linestyle=line_styles[i], color=colors[i], 
 
     # Add labels and legend
     plt.xlabel('Spherical VOI Diameter [mm]')
     plt.ylabel('Recovery Coefficient [%]')
-    plt.title('Recovery Coefficients Calculated with c$_{mean}$') #SUV$_{40}$
+    plt.title('Recovery Coefficients Calculated with c$_{mean}$, and c$_{bkground}$ = 0') #SUV$_{40}$
     plt.legend()
     plt.grid(True)
     plt.xticks(sphere_sizes)  # Set x-ticks to the exact sphere sizes
@@ -1746,9 +1752,9 @@ def plot_recovery_coefficients(recovery_coefficients=None, sphere_sizes=None):
     plt.show(block=False)
     iteration_count += 1
     save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Recovery Coefficients"
-    png_path = os.path.join(save_path, 'testNEMA_IQ_04_rc_calculated_with_SUV_mean_VOI_vs_sphere_size_without_background.png')
-    pdf_path = os.path.join(save_path, 'testNEMA_IQ_04_rc_calculated_with_SUV_mean_VOI_vs_sphere_size_without_background.pdf')
-    pickle_path = os.path.join(save_path, 'testNEMA_IQ_04_rc_calculated_with_SUV_mean_VOI_vs_sphere_size_without_background.pickle')
+    png_path = os.path.join(save_path, 'testNEMA_IQ_04_rc_calculated_with_SUV_mean_VOI_vs_sphere_size_with_background.png')
+    pdf_path = os.path.join(save_path, 'testNEMA_IQ_04_rc_calculated_with_SUV_mean_VOI_vs_sphere_size_with_background.pdf')
+    pickle_path = os.path.join(save_path, 'testNEMA_IQ_04_rc_calculated_with_SUV_mean_VOI_vs_sphere_size_with_background.pickle')
     
     answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here:\n{save_path}\nas\n{png_path}?")
     if answer:

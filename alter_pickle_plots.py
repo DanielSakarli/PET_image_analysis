@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from tkinter import Tk, filedialog, messagebox
 from scipy.interpolate import interp1d
 import numpy as np
+import pandas as pd
 
 def open_pickle_plot(pickle_path):
     # Load the plot from the pickle file
@@ -19,65 +20,72 @@ def alter_pickle_plot(pickle_path, output_pickle_path):
     
 
     ax = fig.axes[0]  # Get the axes object
-    ax.set_title("Image Roughness in Background vs VOI Sizes")
+    #ax.set_title("Image Roughness in Background vs VOI Sizes")
    
-    if False:
-        # Extract existing plot data
-        line = ax.lines[0]
-        x_data, y_data = line.get_xdata(), line.get_ydata()
+    # Extract existing plot data
+    line = ax.lines[0]
+    x_data, y_data = line.get_xdata(), line.get_ydata()
 
-        # Interpolate the data to create a smooth curve
-        interp_func = interp1d(x_data, y_data, kind='cubic', fill_value="extrapolate")
-        x_interp = np.linspace(3, max(x_data), 500)  # Extend interpolation to start at 3 mm
-        y_interp = interp_func(x_interp)
+    # Interpolate the data to create a smooth curve
+    interp_func = interp1d(x_data, y_data, kind='cubic', fill_value="extrapolate")
+    x_interp = np.linspace(3, max(x_data), 500)  # Extend interpolation to start at 3 mm
+    y_interp = interp_func(x_interp)
 
-        # Remove the original line and re-plot only the interpolated curve
-        for line in ax.lines[:]:  # Clear all lines
-            line.remove()
-        ax.plot(x_interp, y_interp, label='Interpolated Curve', color='red')
+    # Save the interpolated x and y values to a CSV file
+    csv_output_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//RC Correction//interpolated_rc_curve_4i_with_background.csv"
+    interpolated_data = pd.DataFrame({'x': x_interp, 'y': y_interp})
+    interpolated_data.to_csv(csv_output_path, index=False)
 
-        # Define x' and y' and add vertical lines
-        x_prime = 9
-        y_prime = 12
+    # Remove the original line and re-plot only the interpolated curve
+    for line in ax.lines[:]:  # Clear all lines
+        line.remove()
+    ax.plot(x_interp, y_interp, label='Interpolated Curve', color='red')
 
-        # Vertical line for x' = 8 mm
-        if min(x_interp) <= x_prime <= max(x_interp):
-            y_at_x_prime = interp_func(x_prime)
-            ax.axvline(x=x_prime, color='red', linestyle='--')  # Red vertical line
-            ax.scatter([x_prime], [y_at_x_prime], color='red')  # Mark the intersection
-            ax.text(x_prime + 0.5, y_at_x_prime - 1.5, f'{y_at_x_prime:.1f}', color='red', fontsize=10)  # Annotate y-value
+    # Plot the original data points
+    ax.scatter(x_data, y_data, color='blue', label='Original Data', zorder=5)
 
-        # Vertical line for y' = 12 mm
-        if min(x_interp) <= y_prime <= max(x_interp):
-            y_at_y_prime = interp_func(y_prime)
-            ax.axvline(x=y_prime, color='red', linestyle='--')  # Red vertical line
-            ax.scatter([y_prime], [y_at_y_prime], color='red')  # Mark the intersection
-            ax.text(y_prime + 0.5, y_at_y_prime - 1.5, f'{y_at_y_prime:.1f}', color='red', fontsize=10)  # Annotate y-value
+    # Define x' and y' and add vertical lines
+    x_prime = 9
+    y_prime = 12
 
-        # Add x' and y' ticks on the x-axis
-        original_xticks = list(ax.get_xticks())  # Get the original ticks
-        new_xticks = sorted(original_xticks + [x_prime, y_prime])  # Add x' and y' to ticks
-        ax.set_xticks(new_xticks)  # Set the updated ticks
+    # Vertical line for x' = 8 mm
+    if min(x_interp) <= x_prime <= max(x_interp):
+        y_at_x_prime = interp_func(x_prime)
+        ax.axvline(x=x_prime, color='red', linestyle='--')  # Red vertical line
+        ax.scatter([x_prime], [y_at_x_prime], color='red')  # Mark the intersection
+        ax.text(x_prime + 0.5, y_at_x_prime - 1.5, f'{y_at_x_prime:.1f}', color='red', fontsize=10)  # Annotate y-value
 
-        # Create tick labels, making x' and y' red
-        xtick_labels = []
-        for tick in new_xticks:
-            if tick == x_prime:
-                xtick_labels.append(f"x'")  # Label for x'
-            elif tick == y_prime:
-                xtick_labels.append(f"y'")  # Label for y'
-            else:
-                xtick_labels.append(f"{int(tick)}")  # Keep other ticks as integers
+    # Vertical line for y' = 12 mm
+    if min(x_interp) <= y_prime <= max(x_interp):
+        y_at_y_prime = interp_func(y_prime)
+        ax.axvline(x=y_prime, color='red', linestyle='--')  # Red vertical line
+        ax.scatter([y_prime], [y_at_y_prime], color='red')  # Mark the intersection
+        ax.text(y_prime + 0.5, y_at_y_prime - 1.5, f'{y_at_y_prime:.1f}', color='red', fontsize=10)  # Annotate y-value
 
-        # Set the tick labels with red color for x' and y'
-        for label, tick in zip(ax.set_xticklabels(xtick_labels), new_xticks):
-            if tick == x_prime or tick == y_prime:
-                label.set_color('red')  # Make x' and y' labels red
-            else:
-                label.set_color('black')  # Keep other labels black
+    # Add x' and y' ticks on the x-axis
+    original_xticks = list(ax.get_xticks())  # Get the original ticks
+    new_xticks = sorted(original_xticks + [x_prime, y_prime])  # Add x' and y' to ticks
+    ax.set_xticks(new_xticks)  # Set the updated ticks
 
-        # Limit the x-axis range
-        ax.set_xlim(5, 40)
+    # Create tick labels, making x' and y' red
+    xtick_labels = []
+    for tick in new_xticks:
+        if tick == x_prime:
+            xtick_labels.append(f"x'")  # Label for x'
+        elif tick == y_prime:
+            xtick_labels.append(f"y'")  # Label for y'
+        else:
+            xtick_labels.append(f"{int(tick)}")  # Keep other ticks as integers
+
+    # Set the tick labels with red color for x' and y'
+    for label, tick in zip(ax.set_xticklabels(xtick_labels), new_xticks):
+        if tick == x_prime or tick == y_prime:
+            label.set_color('red')  # Make x' and y' labels red
+        else:
+            label.set_color('black')  # Keep other labels black
+
+    # Limit the x-axis range
+    ax.set_xlim(5, 40)
 
 
     # Update legend and title
