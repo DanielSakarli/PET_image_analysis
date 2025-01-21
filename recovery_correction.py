@@ -1844,7 +1844,7 @@ def recovery_coefficient_correction_method_5():
 
     
     # Load the interpolated recovery curve from the csv file
-    csv_path = r"C:\Users\DANIE\OneDrive\FAU\Master Thesis\Project\Data\RC Correction\interpolated_rc_curve_4i_no_background.csv"
+    csv_path = r"C:\Users\DANIE\OneDrive\FAU\Master Thesis\Project\Data\RC Correction\interpolated_rc_curve_calculated_with_c_4_hottest_pixels_4i_no_background.csv"
     rc_curve = np.loadtxt(csv_path, delimiter=";", skiprows=1)
     x_data, y_data = rc_curve[:, 0], rc_curve[:, 1]
 
@@ -1877,10 +1877,10 @@ def recovery_coefficient_correction_method_5():
     plt.text(x_prime - 0.5, rc_x_prime + 1.2, f'{rc_x_prime:.2f}', color='red', fontsize=10, ha='right')
     plt.text(y_prime - 0.5, rc_y_prime + 1.2, f'{rc_y_prime:.2f}', color='red', fontsize=10, ha='right')
     plt.text(x_mean - 0.5, rc_mean + 1.2, f'{rc_mean:.2f}', color='blue', fontsize=10, ha='right')
-    plt.title("Interpolated RC Curve, 4i, No Background", fontsize=14)
+    plt.title("Interpolated RC Curve, 4i, With Background", fontsize=14)
     plt.xlabel("Spherical VOI size [mm]", fontsize=13)
     plt.ylabel("Recovery Coefficient [%]", fontsize=13)
-    plt.ylim([0, 100])
+    plt.ylim([0, 140])
     plt.xlim([0, 40])
     plt.legend()
 
@@ -1890,10 +1890,10 @@ def recovery_coefficient_correction_method_5():
 
     # Show the plot to the user
     plt.show(block=False)
-    save_path = r"C:\Users\DANIE\OneDrive\FAU\Master Thesis\Project\Data\RC Correction"
-    png_path = os.path.join(save_path, 'PSMA007_no_background_method_5.png')
-    pdf_path = os.path.join(save_path, 'PSMA007_no_background_method_5.pdf')
-    pickle_path = os.path.join(save_path, 'PSMA007_no_background_method_5.pickle')
+    save_path = r"C:\Users\DANIE\OneDrive\FAU\Master Thesis\Project\Data\RC Correction\PSMA007"
+    png_path = os.path.join(save_path, 'PSMA007_without_background_method_5_c_4hottest_RC.png')
+    pdf_path = os.path.join(save_path, 'PSMA007_without_background_method_5_c_4hottest_RC.pdf')
+    pickle_path = os.path.join(save_path, 'PSMA007_without_background_method_5_c_4hottest_RC.pickle')
     
     answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here:\n{save_path}\nas\n{png_path}?")
     if answer:

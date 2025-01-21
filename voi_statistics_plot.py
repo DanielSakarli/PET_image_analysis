@@ -55,7 +55,7 @@ def get_data_csv(csv_file):
     gluteus_maximus_data = df[df['VoiName(Region) [string]'] == 'gluteus_maximus']
     #print(gluteus_maximus_data)
 
-    IDIF_data = df[df['VoiName(Region) [string]'] == 'Four hottest pixels in all slices']
+    IDIF_data = df[df['VoiName(Region) [string]'] == 'Four hottest pixels per slice']
 
     # Plot and save the plots
     # Prostate lesion plots
@@ -97,7 +97,7 @@ def plot_and_save_average_suv(data, csv_file, yticks_range):
         'prostate_lesion': 'Prostate Lesion',
         'prostate_healthy': 'Healthy Prostate',
         'gluteus_maximus': 'Gluteus Maximus',
-        'Four hottest pixels in all slices': 'Mourik\'s method IDIF'
+        'Four hottest pixels per slice': 'Mourik\'s method IDIF'
     }
     # Reset the index of the DataFrame
     data = data.reset_index(drop=True)
@@ -122,27 +122,38 @@ def plot_and_save_average_suv(data, csv_file, yticks_range):
     plt.grid(True)
     #plt.legend()
     plt.show(block=False)
-    # Save the plot as PNG and pickle
-    save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//VOI Statistics//"
-    png_path = os.path.join(save_path, f'{patient_name}_{voi_name_key}_Averaged_SUVs.png')
-    pickle_path = os.path.join(save_path, f'{patient_name}_{voi_name_key}_Averaged_SUVs.pickle')
-    pdf_path = os.path.join(save_path, f'{patient_name}_{voi_name_key}_Averaged_SUVs.pdf')
+    
+    # Now include the AIF data in the IDIF plot
+    AIF_data = select_txt_file()
+    plt.plot(AIF_data['Time [min]'], AIF_data['AIF shifted [SUV]'], marker='x', color='red')
+    plt.legend(['IDIF', 'AIF'])
+    plt.show(block=False)
+    
+    # Perform the RC correction
+    rc_correction = float(input("Enter the RC correction value, [0-1]: "))
+    data['Averaged [SUV]'] = data['Averaged [SUV]'] / rc_correction
+    
+    # Plot the corrected data
+    plt.plot(data['Time [minutes]'], data['Averaged [SUV]'], marker='o')
+    plt.legend(['IDIF', 'AIF', 'RC Corrected IDIF'])
+    plt.ylim([0, 80])
+    plt.show(block=False)
+
+    # Save the plot as PNG, PDF and pickle
+    save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//VOI Statistics//PSMA007"
+    png_path = os.path.join(save_path, f'{patient_name}_{voi_name_key}_AIF_and_IDIF_RC_correction_with_c_4_hottest_and_no_background.png')
+    pickle_path = os.path.join(save_path, f'{patient_name}_{voi_name_key}_AIF_and_IDIF_RC_correction_with_c_4_hottest_and_no_background.pickle')
+    pdf_path = os.path.join(save_path, f'{patient_name}_{voi_name_key}_AIF_and_IDIF_RC_correction_with_c_4_hottest_and_no_background.pdf')
     answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here:\n{save_path}\nas\n{png_path}?")
-    if answer: 
+    if answer:
         # Save the plot as PNG, PDF, and pickle files
         plt.savefig(png_path)
         plt.savefig(pdf_path)
         with open(pickle_path, 'wb') as f:
             pickle.dump(plt.gcf(), f)
 
-    # Now include the AIF data in the IDIF plot
-    AIF_data = select_txt_file()
-    plt.plot(AIF_data['Time [min]'], AIF_data['AIF shifted [SUV]'], marker='x', color='red')
-    plt.legend(['IDIF', 'AIF'])
-    plt.show()
-
     # Analyze the frequencies of the AIF data
-    fourier_transform(AIF_data)
+    #fourier_transform(AIF_data)
 
 def fourier_transform(df):
    # Extract time and signal
@@ -176,6 +187,7 @@ def fourier_transform(df):
     plt.grid()
     plt.legend()
     plt.show()
+
 
 def plot_and_save_snr(data, csv_file, yticks_range):
     """Plot the data and save the plot as PNG and pickle."""

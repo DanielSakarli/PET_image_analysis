@@ -1621,6 +1621,7 @@ def process_rois_for_predefined_centers(roi_or_voi = 'voi'):
 
     # Initialize an array to store the mean values of the different VOIs
     mean_values = []
+    mean_of_four_highest_values = []
     if roi_or_voi == 'voi':
         SUV_max_values = [] # Reset the global SUV_max_values array if called by the VOI function (to avoid appending the SUV_max to the ones from the ROIs)
     # Calculate the mean values of the different ROIs/VOIs
@@ -1628,11 +1629,18 @@ def process_rois_for_predefined_centers(roi_or_voi = 'voi'):
         if roi_in_roi_masks.ndim == 3:
             mean_value = np.mean(image_stack[roi_in_roi_masks])
             max_value = np.max(image_stack[roi_in_roi_masks])
+            # Calculate the mean of the four highest values
+            four_highest_values = np.partition(image_stack[roi_in_roi_masks].flatten(), -4)[-4:]
+            mean_four_highest = np.mean(four_highest_values)
         else:
             mean_value = np.mean(selected_slice[roi_in_roi_masks])
             max_value = np.max(selected_slice[roi_in_roi_masks])
+            # Calculate the mean of the four highest values
+            four_highest_values = np.partition(selected_slice[roi_in_roi_masks].flatten(), -4)[-4:]
+            mean_four_highest = np.mean(four_highest_values)
         num_pixels = np.sum(roi_in_roi_masks)
         mean_values.append(mean_value)
+        mean_of_four_highest_values.append(mean_four_highest)
         SUV_max_values.append(max_value)
         #print(f"Mean value for VOI {i + 1}: {mean_value:.2f}")
         #print(f"SUV_max value for VOI {i + 1}: {max_value:.2f}")
@@ -1641,7 +1649,7 @@ def process_rois_for_predefined_centers(roi_or_voi = 'voi'):
     # Calculate the recovery coefficient of the different ROIs using the stored mean values
     #print(f"True activity: {true_activity_concentration:.2f}")
     print("Background mean values: ", background_mean_values)
-    for i, mean_value in enumerate(mean_values):
+    for i, mean_value in enumerate(mean_of_four_highest_values):
         print(f"Mean value in background for VOI {i + 1}: {background_mean_values[i]:.2f}")
         recovery_coefficient = ((100 * mean_value - background_mean_values[i]) / true_activity_concentration) + background_mean_values[i]
         recovery_coefficients.append(recovery_coefficient)
@@ -1742,19 +1750,19 @@ def plot_recovery_coefficients(recovery_coefficients=None, sphere_sizes=None):
     # Add labels and legend
     plt.xlabel('Spherical VOI Diameter [mm]')
     plt.ylabel('Recovery Coefficient [%]')
-    plt.title('Recovery Coefficients Calculated with c$_{mean}$, and c$_{bkground}$ = 0') #SUV$_{40}$
+    plt.title('Recovery Coefficients Calculated with c$_{4hottest}$, and c$_{bkground}$ = 0') #SUV$_{40}$
     plt.legend()
     plt.grid(True)
     plt.xticks(sphere_sizes)  # Set x-ticks to the exact sphere sizes
-    plt.ylim(0, 100)
+    plt.ylim(0, 140)
 
     # Show the plot to the user
     plt.show(block=False)
     iteration_count += 1
     save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Recovery Coefficients"
-    png_path = os.path.join(save_path, 'testNEMA_IQ_04_rc_calculated_with_SUV_mean_VOI_vs_sphere_size_with_background.png')
-    pdf_path = os.path.join(save_path, 'testNEMA_IQ_04_rc_calculated_with_SUV_mean_VOI_vs_sphere_size_with_background.pdf')
-    pickle_path = os.path.join(save_path, 'testNEMA_IQ_04_rc_calculated_with_SUV_mean_VOI_vs_sphere_size_with_background.pickle')
+    png_path = os.path.join(save_path, 'NEMA_IQ_04_rc_calculated_with_c_mean_of_4_hottest_voxels_VOI_vs_sphere_size_without_background.png')
+    pdf_path = os.path.join(save_path, 'NEMA_IQ_04_rc_calculated_with_c_mean_of_4_hottest_voxels_VOI_vs_sphere_size_without_background.pdf')
+    pickle_path = os.path.join(save_path, 'NEMA_IQ_04_rc_calculated_with_c_mean_of_4_hottest_voxels_VOI_vs_sphere_size_without_background.pickle')
     
     answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here:\n{save_path}\nas\n{png_path}?")
     if answer:

@@ -32,7 +32,7 @@ def alter_pickle_plot(pickle_path, output_pickle_path):
     y_interp = interp_func(x_interp)
 
     # Save the interpolated x and y values to a CSV file
-    csv_output_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//RC Correction//interpolated_rc_curve_4i_with_background.csv"
+    csv_output_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//RC Correction//interpolated_rc_curve_calculated_with_c_4_hottest_pixels_4i_with_background.csv"
     interpolated_data = pd.DataFrame({'x': x_interp, 'y': y_interp})
     interpolated_data.to_csv(csv_output_path, index=False)
 
