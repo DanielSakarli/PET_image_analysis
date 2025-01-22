@@ -141,9 +141,9 @@ def plot_and_save_average_suv(data, csv_file, yticks_range):
 
     # Save the plot as PNG, PDF and pickle
     save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//VOI Statistics//PSMA007"
-    png_path = os.path.join(save_path, f'{patient_name}_{voi_name_key}_AIF_and_IDIF_RC_correction_with_c_4_hottest_and_no_background.png')
-    pickle_path = os.path.join(save_path, f'{patient_name}_{voi_name_key}_AIF_and_IDIF_RC_correction_with_c_4_hottest_and_no_background.pickle')
-    pdf_path = os.path.join(save_path, f'{patient_name}_{voi_name_key}_AIF_and_IDIF_RC_correction_with_c_4_hottest_and_no_background.pdf')
+    png_path = os.path.join(save_path, f'{patient_name}_{voi_name_key}_AIF_and_IDIF_RC_correction_with_c_4_hottest_and_no_background_method_4.png')
+    pickle_path = os.path.join(save_path, f'{patient_name}_{voi_name_key}_AIF_and_IDIF_RC_correction_with_c_4_hottest_and_no_background_method_4.pickle')
+    pdf_path = os.path.join(save_path, f'{patient_name}_{voi_name_key}_AIF_and_IDIF_RC_correction_with_c_4_hottest_and_no_background_method_4.pdf')
     answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here:\n{save_path}\nas\n{png_path}?")
     if answer:
         # Save the plot as PNG, PDF, and pickle files

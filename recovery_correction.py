@@ -29,7 +29,7 @@ from scipy import ndimage
 from matplotlib.colors import Normalize
 import pickle
 import concurrent.futures
-#from tqdm import tqdm
+from tqdm import tqdm
 from scipy.interpolate import interp1d
 import seaborn as sns
 
@@ -837,8 +837,8 @@ def noise_vs_sphere_size():
         #centers = [(current_index, 212, 273), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]
         
         # NEMA IQ phantom centers for first scan from the 10.10.2024
-        centers = [(current_index, 210, 271), (current_index, 217, 228), (current_index, 256, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]
-
+        centers = [(current_index, 210, 271), (current_index, 218, 228), (current_index, 257, 214), (current_index, 289, 241), (current_index, 282, 282), (current_index, 242, 297)]            
+    
         # Centers of 6 3D spheres with a 344x344 image size, increasing sphere sizes
         # centers = [(0, 142, 183), (0, 146, 154), (0, 172, 144), (0, 194, 161), (0, 190, 189), (0, 165, 200)] 
     
@@ -1762,8 +1762,12 @@ def recovery_coefficient_correction_method_4(mask_x, mask_y, mask_z, x_prime, y_
     z_prime /= 2
     
     rc_x = []
+    rc_x_4_hottest = []
     rc_y = []
+    rc_y_4_hottest = []
     rc_z = []
+    rc_z_4_hottest = []
+
     # Get the different spherical VOI masks and their corresponding RC values
     for mask in mask_x:
         # Ensure that mask is a boolean array
@@ -1772,7 +1776,9 @@ def recovery_coefficient_correction_method_4(mask_x, mask_y, mask_z, x_prime, y_
         # Extract pixel values using the boolean mask
         pixel_values = image_stack[mask]
         rc_x_value = np.mean(pixel_values) / true_activity_concentration
+        rc_x_4_hottest_value = np.mean(np.sort(pixel_values)[-4:]) / true_activity_concentration
         rc_x.append(rc_x_value)
+        rc_x_4_hottest.append(rc_x_4_hottest_value)
 
     for mask in mask_y:
         # Ensure that mask is a boolean array
@@ -1780,7 +1786,9 @@ def recovery_coefficient_correction_method_4(mask_x, mask_y, mask_z, x_prime, y_
         # Extract pixel values using the boolean mask
         pixel_values = image_stack[mask]
         rc_y_value = np.mean(pixel_values) / true_activity_concentration
+        rc_y_4_hottest_value = np.mean(np.sort(pixel_values)[-4:]) / true_activity_concentration
         rc_y.append(rc_y_value)
+        rc_y_4_hottest.append(rc_y_4_hottest_value)
 
     for mask in mask_z:
         # Ensure that mask is a boolean array
@@ -1788,7 +1796,9 @@ def recovery_coefficient_correction_method_4(mask_x, mask_y, mask_z, x_prime, y_
         # Extract pixel values using the boolean mask
         pixel_values = image_stack[mask]
         rc_z_value = np.mean(pixel_values) / true_activity_concentration
+        rc_z_4_hottest_value = np.mean(np.sort(pixel_values)[-4:]) / true_activity_concentration
         rc_z.append(rc_z_value)
+        rc_z_4_hottest.append(rc_z_4_hottest_value)
 
     # Store original x-tick positions and labels
     original_x_ticks = list(range(len(rc_x)))
@@ -1797,12 +1807,15 @@ def recovery_coefficient_correction_method_4(mask_x, mask_y, mask_z, x_prime, y_
     # Interpolate the RC curves
     number_of_points_interpolation = 400
     rc_x = interpolate_lineprofile_cubic(rc_x, num_points=number_of_points_interpolation)
+    rc_x_4_hottest = interpolate_lineprofile_cubic(rc_x_4_hottest, num_points=number_of_points_interpolation)
     rc_y = interpolate_lineprofile_cubic(rc_y, num_points=number_of_points_interpolation)
-    rc_z = interpolate_lineprofile_cubic(rc_z, num_points=number_of_points_interpolation)    
+    rc_y_4_hottest = interpolate_lineprofile_cubic(rc_y_4_hottest, num_points=number_of_points_interpolation)
+    rc_z = interpolate_lineprofile_cubic(rc_z, num_points=number_of_points_interpolation)
+    rc_z_4_hottest = interpolate_lineprofile_cubic(rc_z_4_hottest, num_points=number_of_points_interpolation)
+
     # Convert voxel indices to mm
     x_mm = np.linspace(0, 17 * pixel_spacing, number_of_points_interpolation)
     
-
     # Plot the RC curve 
     plt.figure("RC Curves")
     plt.plot(x_mm, rc_x, label='RC Curve x')
@@ -1822,19 +1835,31 @@ def recovery_coefficient_correction_method_4(mask_x, mask_y, mask_z, x_prime, y_
     # Therefore, we have to convert the interpolated curve to mm size
     # Interpolate to find the RC values at the given artery sizes in mm
     interpolate_rc_x = interp1d(x_mm, rc_x, kind='cubic')
+    interpolate_rc_x_4_hottest = interp1d(x_mm, rc_x_4_hottest, kind='cubic')
     interpolate_rc_y = interp1d(x_mm, rc_y, kind='cubic')
+    interpolate_rc_y_4_hottest = interp1d(x_mm, rc_y_4_hottest, kind='cubic')
     interpolate_rc_z = interp1d(x_mm, rc_z, kind='cubic')
+    interpolate_rc_z_4_hottest = interp1d(x_mm, rc_z_4_hottest, kind='cubic')
     rc_x_artery = interpolate_rc_x(x_prime)
+    rc_x_artery_4_hottest = interpolate_rc_x_4_hottest(x_prime)
     rc_y_artery = interpolate_rc_y(y_prime)
+    rc_y_artery_4_hottest = interpolate_rc_y_4_hottest(y_prime)
     rc_z_artery = interpolate_rc_z(z_prime)
+    rc_z_artery_4_hottest = interpolate_rc_z_4_hottest(z_prime)
     
     print(f"RC value for x_artery: {rc_x_artery}")
+    print(f"RC value for x_artery_4_hottest: {rc_x_artery_4_hottest}")
     print(f"RC value for y_artery: {rc_y_artery}")
+    print(f"RC value for y_artery_4_hottest: {rc_y_artery_4_hottest}")
     print(f"RC value for z_artery: {rc_z_artery}")
+    print(f"RC value for z_artery_4_hottest: {rc_z_artery_4_hottest}")
 
     # Mean value of all RCs
     mean_rc = np.mean([rc_x_artery, rc_y_artery, rc_z_artery])
+    mean_rc_4_hottest = np.mean([rc_x_artery_4_hottest, rc_y_artery_4_hottest, rc_z_artery_4_hottest])
     print(f"Mean Recovery Coefficient: {mean_rc:.4f}")
+    print(f"Mean Recovery Coefficient 4 hottest: {mean_rc_4_hottest:.4f}")
+
 
 def recovery_coefficient_correction_method_5():
     """
