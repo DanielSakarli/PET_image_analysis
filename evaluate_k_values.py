@@ -21,14 +21,15 @@ def process_csv(file_path):
     # Split the Patient_ID into Patient_Number and Reconstruction_Method
     df_2tc_re[['Patient_Number', 'Reconstruction_Method']] = df_2tc_re['Patient_ID'].str.split('_', n=1, expand=True)
     df_2tc_irre[['Patient_Number', 'Reconstruction_Method']] = df_2tc_irre['Patient_ID'].str.split('_', n=1, expand=True)
-
-    # Divide the df into the different regions lesion, healthy_prostate, and gluteus_maximus
-    df_2tc_re_lesion = df_2tc_re[df_2tc_re["Region"] == "lesion"]
-    df_2tc_re_healthy_prostate = df_2tc_re[df_2tc_re["Region"] == "healthy_prostate"]
-    df_2tc_re_gluteus_maximus = df_2tc_re[df_2tc_re["Region"] == "gluteus_maximus"]
-    df_2tc_irre_lesion = df_2tc_irre[df_2tc_irre["Region"] == "lesion"]
-    df_2tc_irre_healthy_prostate = df_2tc_irre[df_2tc_irre["Region"] == "healthy_prostate"]
-    df_2tc_irre_gluteus_maximus = df_2tc_irre[df_2tc_irre["Region"] == "gluteus_maximus"]
+    
+    if False:
+        # Divide the df into the different regions lesion, healthy_prostate, and gluteus_maximus
+        df_2tc_re_lesion = df_2tc_re[df_2tc_re["Region"] == "lesion"]
+        df_2tc_re_healthy_prostate = df_2tc_re[df_2tc_re["Region"] == "healthy_prostate"]
+        df_2tc_re_gluteus_maximus = df_2tc_re[df_2tc_re["Region"] == "gluteus_maximus"]
+        df_2tc_irre_lesion = df_2tc_irre[df_2tc_irre["Region"] == "lesion"]
+        df_2tc_irre_healthy_prostate = df_2tc_irre[df_2tc_irre["Region"] == "healthy_prostate"]
+        df_2tc_irre_gluteus_maximus = df_2tc_irre[df_2tc_irre["Region"] == "gluteus_maximus"]
 
     # Calculate Spearman correlation for each k variable
     k_variables = ["Flux", "K1", "k2", "k3", "k4"]
@@ -104,8 +105,11 @@ def create_boxplot(df, k_variables):
             if patient_data.empty:
                 continue
 
-            # Extract k_variable values for the patient
-            values = patient_data[k_variable]
+            # Convert k_variables to numeric
+            values = pd.to_numeric(patient_data[k_variable], errors="coerce")
+            
+            # Drop NaN values
+            values = values.dropna()
 
             # Calculate the IQR and identify outlier thresholds
             Q1 = values.quantile(0.25)
@@ -153,10 +157,10 @@ def create_boxplot(df, k_variables):
     plt.tight_layout()
     # Show the plot to the user
     plt.show(block=False)
-    save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Kinetic Modelling//Boxplots//IDIF one hottest pixel per slice"
-    png_path = os.path.join(save_path, f'IDIF_one_hottest_pixel_{model_name}_for_{region_name}_all_recon_settings.png')
-    pdf_path = os.path.join(save_path, f'IDIF_one_hottest_pixel_{model_name}_for_{region_name}_all_recon_settings.pdf')
-    pickle_path = os.path.join(save_path, f'IDIF_one_hottest_pixel_{model_name}_for_{region_name}_all_recon_settings.pickle')
+    save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Kinetic Modelling//Boxplots//AIF"
+    png_path = os.path.join(save_path, f'AIF_{model_name}_for_{region_name}_all_recon_settings.png')
+    pdf_path = os.path.join(save_path, f'AIF_{model_name}_for_{region_name}_all_recon_settings.pdf')
+    pickle_path = os.path.join(save_path, f'AIF_{model_name}_for_{region_name}_all_recon_settings.pickle')
     
     answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here:\n{save_path}\nas\n{png_path}?")
     if answer:
@@ -209,14 +213,14 @@ def create_lineplots(df, k_variables):
             data_for_plotting.append(
                 pd.DataFrame({
                     "Reconstruction_Method": patient_data["Reconstruction_Method"],
-                    k_variable: patient_data[k_variable],
+                    k_variable: pd.to_numeric(patient_data[k_variable], errors="coerce"),
                     "Patient": patient
-                })
+                }).dropna()
             )
 
         # Combine all patient data into one DataFrame
         combined_data = pd.concat(data_for_plotting)
-
+        print(f"\nCombined Data for {k_variable}:\n", combined_data.head())
         # Create the line plot
         plt.figure(figsize=(12, 6))
         sns.lineplot(
@@ -240,20 +244,21 @@ def create_lineplots(df, k_variables):
         plt.tight_layout()
         # Show the plot to the user
         plt.show(block=False)
-        if k_variable == "Flux":
-            plt.ylim(0, 0.1)
-        if k_variable == "K1":
-            plt.ylim(0, 0.5)
-        if k_variable == "k2":
-            plt.ylim(0, 0.5)
-        if k_variable == "k3":
-            plt.ylim(0, 0.2)
-        if k_variable == "k4":
-            plt.ylim(0, 0.05)
-        save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Kinetic Modelling//Lineplots//IDIF one hottest pixel per slice"
-        png_path = os.path.join(save_path, f'IDIF_one_hottest_pixel_{model_name}_for_{region_name}_and_{k_variable}_variable_all_recon_settings.png')
-        pdf_path = os.path.join(save_path, f'IDIF_one_hottest_pixel_{model_name}_for_{region_name}_and_{k_variable}_variable_all_recon_settings.pdf')
-        pickle_path = os.path.join(save_path, f'IDIF_one_hottest_pixel_{model_name}_for_{region_name}_and_{k_variable}_variable_all_recon_settings.pickle')
+        if False:
+            if k_variable == "Flux":
+                plt.ylim(0, 0.1)
+            if k_variable == "K1":
+                plt.ylim(0, 0.5)
+            if k_variable == "k2":
+                plt.ylim(0, 0.5)
+            if k_variable == "k3":
+                plt.ylim(0, 0.2)
+            if k_variable == "k4":
+                plt.ylim(0, 0.05)
+        save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Kinetic Modelling//Lineplots//AIF"
+        png_path = os.path.join(save_path, f'AIF_{model_name}_for_{region_name}_and_{k_variable}_variable_all_recon_settings.png')
+        pdf_path = os.path.join(save_path, f'AIF_{model_name}_for_{region_name}_and_{k_variable}_variable_all_recon_settings.pdf')
+        pickle_path = os.path.join(save_path, f'AIF_{model_name}_for_{region_name}_and_{k_variable}_variable_all_recon_settings.pickle')
         
         answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here:\n{save_path}\nas\n{png_path}?")
         if answer:
@@ -268,21 +273,6 @@ def create_lineplots(df, k_variables):
 
 
 if __name__ == "__main__":
-    file_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Kinetic Modelling//All_patients_k_values_IDIF_one_hottest_pixel.csv"
+    file_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Kinetic Modelling//All_patients_k_values_AIF_with_inital_parameters_equal_0.csv"
     process_csv(file_path)
     
-    if False:
-        # Get DataFrames for specific Patient_ID and Model
-        df_psma001_02_two_c_irre = unique_dfs.get(("PSMA001_02", "2_Tissue_Compartments"))    # two comparments irreversible
-        df_psma001_02_two_c_re = unique_dfs.get(("PSMA001_02", "2_Tissue_Compartments,_FDG"))      # two compartments reversible
-
-        if df_psma001_02_two_c_irre is not None and df_psma001_02_two_c_re is not None:
-            # Calculate Spearman correlation
-            try:
-                correlation, p_value = calculate_spearman_correlation(df_psma001_02_two_c_irre, df_psma001_02_two_c_re)
-                print(f"Spearman Correlation: {correlation}")
-                print(f"P-value: {p_value}")
-            except ValueError as e:
-                print(f"Error: {e}")
-        else:
-            print("One or both of the specified Patient_IDs are missing.")
