@@ -38,15 +38,15 @@ def process_csv(file_path):
         for var in k_variables:
             correlation_matrix = calculate_spearman_correlation(df, var, model)
             correlation_results[(model, var)] = correlation_matrix
-
+    print("I'm here")
     # Generate boxplots for all patients and k variables
     # With the reversible model
     create_boxplot(df_2tc_re, k_variables)
-    create_lineplots(df_2tc_re, k_variables)
-    # With the irreversible model, exclude the k4 variable
+    #create_lineplots(df_2tc_re, k_variables)
+    # With the irreversible model, exclude the k4 variable, so it doesn't appear as a x label in the plot
     k_variables.remove("k4")
     create_boxplot(df_2tc_irre, k_variables)
-    create_lineplots(df_2tc_irre, k_variables)
+    #create_lineplots(df_2tc_irre, k_variables)
     
     return correlation_results
     
@@ -95,18 +95,18 @@ def create_boxplot(df, k_variables):
     elif df["Region"].iloc[0] == "gluteus_maximus":
         region_name = "Gluteus Maximus"
 
-    # Prepare data for plotting
-    data_for_plotting = []
+    
     for k_variable in k_variables:
-        for patient in df["Patient_Number"].unique():
-            # Filter the data for the specific patient
-            patient_data = df[df["Patient_Number"] == patient]
+        data_for_plotting = []
+        for recon_setting in df["Reconstruction_Method"].unique():
+                # Filter the data for the specific recon method
+            recon_data = df[df["Reconstruction_Method"] == recon_setting]
 
-            if patient_data.empty:
+            if recon_data.empty:
                 continue
 
-            # Convert k_variables to numeric
-            values = pd.to_numeric(patient_data[k_variable], errors="coerce")
+            # Convert k_variable to numeric
+            values = pd.to_numeric(recon_data[k_variable], errors="coerce")
             
             # Drop NaN values
             values = values.dropna()
@@ -125,53 +125,118 @@ def create_boxplot(df, k_variables):
             data_for_plotting.append(
                 pd.DataFrame({
                     "Values": filtered_values,
-                    "Patient": patient,
-                    "Variable": k_variable
+                    "Recon_Setting": recon_setting,
+                    "Patient Number": recon_data["Patient_Number"]
                 })
             )
+        
+        # Combine all patient data into one DataFrame
+        combined_data = pd.concat(data_for_plotting)
 
-    # Combine all patient data into one DataFrame
-    combined_data = pd.concat(data_for_plotting)
+        # Create the boxplot using Seaborn
+        plt.figure(figsize=(12, 8))
+        sns.boxplot(
+            data=combined_data,
+            x="Recon_Setting",
+            y="Values",
+            dodge=True,  # Overlay boxplots for each variable
+            linewidth=1.5
+        )
+        sns.stripplot(
+            data=combined_data,
+            x="Recon_Setting",
+            y="Values",
+            hue="Patient Number",
+            palette="Set2",
+            alpha=0.75,
+            jitter=True,
+            dodge=True
+        )
+        sns.despine()  # Remove top and right axes
+        plt.grid(axis="y", linestyle="--", alpha=0.7)  # Add grid for better readability
+        plt.title(f"{model_name} for {region_name} - {k_variable} with all Recon Settings", fontsize=14)
+        plt.xlabel("Reconstruction Method", fontsize=12)
+        plt.ylim(0, 0.2)
+        plt.ylabel(f"{k_variable} Values [min⁻¹]", fontsize=12)
+        plt.tight_layout()
+        # Show the plot to the user
+        plt.show(block=False)
+        save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Kinetic Modelling//Boxplots//AIF"
+        png_path = os.path.join(save_path, f'{k_variable}_AIF_{model_name}_for_{region_name}_all_recon_settings.png')
+        pdf_path = os.path.join(save_path, f'{k_variable}_AIF_{model_name}_for_{region_name}_all_recon_settings.pdf')
+        pickle_path = os.path.join(save_path, f'{k_variable}_AIF_{model_name}_for_{region_name}_all_recon_settings.pickle')
+        
+        answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here:\n{save_path}\nas\n{png_path}?")
+        if answer:
+            # Save the plot as PNG, PDF, and pickle files
+            plt.savefig(png_path)
+            plt.savefig(pdf_path)
+            with open(pickle_path, 'wb') as f:
+                pickle.dump(plt.gcf(), f)
 
-    # Create the boxplot using Seaborn
-    plt.figure(figsize=(12, 8))
-    sns.boxplot(
-        data=combined_data,
-        x="Variable",
-        y="Values",
-        hue="Patient",
-        dodge=True,  # Overlay boxplots for each variable
-        linewidth=1.5
-    )
-    sns.despine()  # Remove top and right axes
-    plt.grid(axis="y", linestyle="--", alpha=0.7)  # Add grid for better readability
-    plt.title(f"{model_name} for {region_name} with all Recon Settings", fontsize=14)
-    plt.xlabel("k Variables", fontsize=12)
-    plt.ylim(0, 0.5)
-    plt.ylabel("k Values [min⁻¹]", fontsize=12)
-    plt.legend(
-            title="Patient",
-            loc="upper right",  # Position within the plot
-            bbox_to_anchor=(0.98, 0.98)  # Fine-tune the location
-    )
-    plt.tight_layout()
-    # Show the plot to the user
-    plt.show(block=False)
-    save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Kinetic Modelling//Boxplots//AIF"
-    png_path = os.path.join(save_path, f'AIF_{model_name}_for_{region_name}_all_recon_settings.png')
-    pdf_path = os.path.join(save_path, f'AIF_{model_name}_for_{region_name}_all_recon_settings.pdf')
-    pickle_path = os.path.join(save_path, f'AIF_{model_name}_for_{region_name}_all_recon_settings.pickle')
-    
-    answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here:\n{save_path}\nas\n{png_path}?")
-    if answer:
-        # Save the plot as PNG, PDF, and pickle files
-        plt.savefig(png_path)
-        plt.savefig(pdf_path)
-        with open(pickle_path, 'wb') as f:
-            pickle.dump(plt.gcf(), f)
+        # Show the plot again to ensure it remains visible after saving it
+        plt.show()
+    if False:
+        for k_variable in k_variables:
+            for patient in df["Patient_Number"].unique():
+                # Filter the data for the specific patient
+                patient_data = df[df["Patient_Number"] == patient]
 
-    # Show the plot again to ensure it remains visible after saving it
-    plt.show()
+                if patient_data.empty:
+                    continue
+
+                # Convert k_variables to numeric
+                values = pd.to_numeric(patient_data[k_variable], errors="coerce")
+                
+                # Drop NaN values
+                values = values.dropna()
+
+                # Calculate the IQR and identify outlier thresholds
+                Q1 = values.quantile(0.25)
+                Q3 = values.quantile(0.75)
+                IQR = Q3 - Q1
+                lower_bound = Q1 - 1.5 * IQR
+                upper_bound = Q3 + 1.5 * IQR
+
+                # Filter out outliers
+                filtered_values = values[(values >= lower_bound) & (values <= upper_bound)]
+
+                # Append to the plotting data
+                data_for_plotting.append(
+                    pd.DataFrame({
+                        "Values": filtered_values,
+                        "Patient": patient,
+                        "Variable": k_variable
+                    })
+                )
+
+        # Combine all patient data into one DataFrame
+        combined_data = pd.concat(data_for_plotting)
+
+        # Create the boxplot using Seaborn
+        plt.figure(figsize=(12, 8))
+        sns.boxplot(
+            data=combined_data,
+            x="Variable",
+            y="Values",
+            hue="Recon_Setting",
+            dodge=True,  # Overlay boxplots for each variable
+            linewidth=1.5
+        )
+        sns.despine()  # Remove top and right axes
+        plt.grid(axis="y", linestyle="--", alpha=0.7)  # Add grid for better readability
+        plt.title(f"{model_name} for {region_name} with all Recon Settings", fontsize=14)
+        plt.xlabel("k Variables", fontsize=12)
+        plt.ylim(0, 0.5)
+        plt.ylabel("k Values [min⁻¹]", fontsize=12)
+        plt.legend(
+                title="Patient",
+                loc="upper right",  # Position within the plot
+                bbox_to_anchor=(0.98, 0.98)  # Fine-tune the location
+        )
+        plt.tight_layout()
+        # Show the plot to the user
+        plt.show(block=False)
 
 def create_lineplots(df, k_variables):
     """
