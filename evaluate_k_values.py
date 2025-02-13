@@ -147,7 +147,9 @@ def create_scatterplot(df, k_variables):
             x = df_pair["04"]
             # y is the current column
             y = df_pair[col]
-
+            print(f"x ({k_variable} for '04'):\n", x)
+            print(f"y ({k_variable} for '{col}'):\n", y)
+            print(f"median of y ({k_variable} for '{col}'): {y.median()}")
             # Perform linear regression
             result = linregress(x, y)
 
@@ -164,23 +166,40 @@ def create_scatterplot(df, k_variables):
             print(f"R-squared: {r_squared}")
             print(f"p-value: {p_value}")
             print(f"Slope std. error: {std_err}")
+            # Scatter plot using Seaborn
+            sns.scatterplot(x=x, y=y, label=f"04 vs {col}. R²={r_squared:.3f}")
 
-            # Create a figure
-            #plt.figure(figsize=(12, 8))
-
-            # Scatter plot
-            plt.scatter(x, y, alpha=0.7, label=f"04vs{col}. R²={r_squared:.3f}")
-
-            # Linear regression line using NumPy polyfit
-            #slope, intercept = np.polyfit(x, y, 1)
+            # Linear regression line using Seaborn
             x_fit = np.linspace(x.min(), x.max(), 100)
             y_fit = slope * x_fit + intercept
-            plt.plot(x_fit, y_fit, color="red")
+            sns.lineplot(x=x_fit, y=y_fit, color="red")
+
+            # Scatter plot
+            #plt.scatter(x, y, alpha=0.7, label=f"04vs{col}. R²={r_squared:.3f}")
+            
+            # Linear regression line using NumPy polyfit
+            #slope, intercept = np.polyfit(x, y, 1)
+            #x_fit = np.linspace(x.min(), x.max(), 100)
+            #y_fit = slope * x_fit + intercept
+            #plt.plot(x_fit, y_fit, color="red")
 
             # Determine axis limits automatically (or set your own)
-            min_val = 0.01
-            max_val = 0.06
-
+            if k_variable == "Flux":
+                min_val = 0.01
+                max_val = 0.06
+            elif k_variable == "K1":
+                min_val = 0.04
+                max_val = 0.16
+            elif k_variable == "k2":
+                min_val = 0.01
+                max_val = 0.16
+            elif k_variable == "k3":
+                min_val = 0.01
+                max_val = 0.16
+            elif k_variable == "k4":
+                min_val = 0
+                max_val = 0.05
+                
             # Plot 45° reference line
             plt.plot([min_val, max_val], [min_val, max_val],
                     linestyle="--", color="gray")
@@ -188,13 +207,20 @@ def create_scatterplot(df, k_variables):
             # Set axes
             plt.xlim(min_val, max_val)
             plt.ylim(min_val, max_val)
-            plt.xlabel(f"{k_variable} [min$^{{-1}}$] (Reconstruction 04)", fontsize=12)
-            plt.ylabel(f"{k_variable} [min$^{{-1}}$] (All other reconstructions)", fontsize=12)
-
-            plt.title(f"{model_name} – {region_name} – {k_variable}", fontsize=14)
+            if k_variable == "Flux":
+                plt.xlabel(f"$K_i$ [min$^{{-1}}$] (Reconstruction 04)", fontsize=12)
+                plt.ylabel(f"$K_i$ [min$^{{-1}}$] (All other reconstructions)", fontsize=12)
+            else:
+                plt.xlabel(f"{k_variable} [min$^{{-1}}$] (Reconstruction 04)", fontsize=12)
+                plt.ylabel(f"{k_variable} [min$^{{-1}}$] (All other reconstructions)", fontsize=12)
+            if k_variable == "Flux":
+                plt.title(f"{model_name} – {region_name} – $K_i$", fontsize=14)
+            else:
+                plt.title(f"{model_name} – {region_name} – {k_variable}", fontsize=14)
             plt.legend()
-            plt.grid(True)
-            plt.tight_layout()
+            sns.despine()
+            #plt.grid(True)
+            #plt.tight_layout()
         # Show the plot to the user
         plt.show(block=False)
         save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Kinetic Modelling//Scatterplots//AIF"

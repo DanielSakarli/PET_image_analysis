@@ -34,7 +34,7 @@ import numpy as np
 from scipy import ndimage
 from matplotlib.colors import Normalize
 import pickle
-
+from numba import njit
 
 # Initialize global variables
 rgb_image = None
@@ -708,17 +708,44 @@ def get_mean_value(image_stack, mask):
     # Calculate and return the mean value of the pixel values
     return np.mean(pixel_values)
 
+@njit
+def get_mean_value_numba(image_stack, mask):
+    """
+    Calculate the mean value of the pixel values within the mask
+    using explicit loops for Numba compatibility.
+    image_stack: 3D float (or int) array
+    mask: 3D boolean array
+    """
+    depth, height, width = mask.shape
+    total = 0.0
+    count = 0
+
+    for z in range(depth):
+        for y in range(height):
+            for x in range(width):
+                if mask[z, y, x]:
+                    total += image_stack[z, y, x]
+                    count += 1
+
+    if count == 0:
+        return 0.0
+
+    return total / count
+
 def calculate_SUV_N():
+    global dicom_images, current_index, roi_masks, iteration_count, loaded_folder_path
+    
     process_rois_for_predefined_centers('roi') # initialize the 2D ROI mask
     suv_peak_values = suv_peak_with_spherical_voi() # Get the SUV_peak with 2D ROI mask (3D is computationally too expensive)
     process_rois_for_predefined_centers('voi') # update the 2D ROI mask to be a 3D VOI mask for SUV_N calculation
-    global dicom_images, current_index, roi_masks, iteration_count, loaded_folder_path
+    
     sphere_sizes = [10, 13, 17, 22, 28, 37]  # Sphere sizes
     results = {size: [] for size in sphere_sizes}  # Dictionary to store results for each sphere size
+    mean_values = []  # List to store mean value for each sphere size
     image_stack = build_image_stack()
     roi_masks_array = np.array(roi_masks)
     print(f"Shape of roi_masks_array: {roi_masks_array.shape}")
-    while True:    
+    while True:
         # Extract the relevant slice from the image stack
         #current_slice = image_stack[current_index]
         # Extract the top N pixel values where roi_masks is True
@@ -738,47 +765,16 @@ def calculate_SUV_N():
                 mean_top_N = np.mean(top_N_values)
                 results[sphere_size].append(mean_top_N)
                 print(f"SUV_{N} for sphere size {sphere_size} mm: {mean_top_N:.2f} Bq/mL")
-
+            mean_value = np.mean(masked_values)
+            mean_values.append(mean_value)
         # Update plot
-        load_more_data = plot_SUV_N(sphere_sizes, results, suv_peak_values) # , suv_peak_values)
+        load_more_data = plot_SUV_N(sphere_sizes, results, suv_peak_values, mean_values) # , suv_peak_values)
         if not load_more_data:
             break
         # More data to plot
         iteration_count += 1
-        
-        if False:
-            # Plot for RC vs sphere size for different recons
-            # Extract the top N pixel values where roi_masks is True
-            masked_values = image_stack[roi_masks_array]
-            top_N_values = np.partition(masked_values, -N)[-N:]
-            mean_top_N = np.mean(top_N_values)
-            results.append(mean_top_N)
-        
-            # Update plot
-            plt.figure('SUV${_N}$ Plot')
-            plt.plot(sphere_sizes[:len(results)], results, marker='o', label=f'Iteration: {iteration_count + 1}')
-            plt.xlabel('Sphere Size [mm]')
-            plt.ylabel('SUV${_N}$ [Bq/mL]')
-            plt.title('SUV${_N}$ vs Sphere Size')
-            plt.legend()
-            plt.grid(True)
-        
-        # Ask user to load more data or not
-        if False:
-            answer = messagebox.askyesno("Load More Data", "Do you want to load more data?")
-            if not answer:
-                parent_directory = os.path.dirname(loaded_folder_path)
-                png_path = os.path.join(parent_directory, 'SUV_N_plot.png')
-                pickle_path = os.path.join(parent_directory, 'SUV_N_plot.pickle')
-                plt.savefig(png_path)
-                with open(pickle_path, 'wb') as f:
-                    pickle.dump(plt.gcf(), f)
-                plt.show()
-                break
-        
-        
 
-def plot_SUV_N(sphere_sizes, results, suv_peak_values):
+def plot_SUV_N(sphere_sizes, results, suv_peak_values, mean_values):
     global SUV_max_values, loaded_folder_path, iteration_count
 
     # Takes the first 6 values (i.e. the SUV_peak of the 6 spheres)
@@ -788,10 +784,14 @@ def plot_SUV_N(sphere_sizes, results, suv_peak_values):
     for i, sphere_size in enumerate(sphere_sizes):
         results[sphere_size].insert(0, SUV_max_values[i])
 
+    # Add mean values to the results for each sphere size
+    for i, sphere_size in enumerate(sphere_sizes):
+        results[sphere_size].append(mean_values[i])
+
     # Add suv_peak_values to the results for each sphere size
     for i, sphere_size in enumerate(sphere_sizes):
         results[sphere_size].append(suv_peak_values[i])
-    
+    print("results: ", results)
     # Normalize the SUV_max/SUV_N/SUV_peak values with formula (1) provided in https://doi.org/10.1007/s11604-021-01112-w
     phantom_weight =  12.6 # measured the water-filled NEMQ IQ phantom in kg (+-0.1 kg) (NEMA NU 2-2007)
     #injected_activity = 2729200 # measured the injected activity in Bq
@@ -828,15 +828,15 @@ def plot_SUV_N(sphere_sizes, results, suv_peak_values):
 
 
     # Define x-axis labels
-    x_labels = [r'SUV$_{max}$'] + [f'SUV$_{{{N}}}$' for N in range(5, 45, 5)] + [r'SUV$_{peak}$']
+    x_labels = [r'c$_{max}$'] + [f'c$_{{{N}}}$' for N in range(5, 45, 5)] + [r'c$_{mean}$'] + [r'c$_{peak}$']
    
-    # Plot the SUV_peak against the sphere size
-    plt.figure('SUV$_{N}$ Plot')
-    for sphere_size in sphere_sizes:
-        plt.plot(range(0, 50, 5), results[sphere_size], marker='o', label=f'Sphere size: {sphere_size} mm')
+    # Plot the c_peak against the sphere size
+    #plt.figure('c$_{N}$ Plot')
+    #for sphere_size in sphere_sizes:
+    #    plt.plot(range(0, 50, 5), results[sphere_size], marker='o', label=f'Sphere size: {sphere_size} mm')
    
-    plt.xticks(range(0, 50, 5), x_labels)  # Set x-ticks to the defined labels
-    plt.legend()
+    #plt.xticks(range(0, 50, 5), x_labels)  # Set x-ticks to the defined labels
+    #plt.legend()
     
     # Plot the abs_sum values against the x_labels
     plt.figure('Summed Absolute Error Plot')
@@ -875,7 +875,7 @@ def plot_SUV_N(sphere_sizes, results, suv_peak_values):
         # Increment the iteration counter for the legend of the plot
         iteration_count += 1
         # Add the current iteration count to the legend entries
-        legend_entries.append(f'{iteration_count} iterations')
+        legend_entries.append(f'{iteration_count}i')
 
         # Plot the abs_sum values against the x_labels
         plt.figure('Summed Absolute Error Plot')
@@ -888,7 +888,7 @@ def plot_SUV_N(sphere_sizes, results, suv_peak_values):
         plt.grid(True)
 
         # Add legend with the iteration counter in the title and entries
-        plt.legend(legend_entries, title=f'Number of iterations: ')
+        plt.legend(legend_entries, title=f'Number of iterations i: ')
 
         return False
     else:
@@ -898,7 +898,7 @@ def plot_SUV_N(sphere_sizes, results, suv_peak_values):
 
 def suv_peak_with_spherical_voi():
     global current_index, dicom_images, roi_masks, loaded_folder_path
-
+    cur_index = current_index
     radius_mm = 6.204  # Sphere radius in mm for a 1 mL 3D sphere
     dicom_image = dicom_images[current_index]
     
@@ -922,42 +922,33 @@ def suv_peak_with_spherical_voi():
 
     print(f"Shape of image stack: {image_stack.shape}")
     print(f"roi_masks shape: {roi_masks_array.shape}")
-    print(f"roi_masks content: {roi_masks_array}")
+    #print(f"roi_masks content: {roi_masks_array}")
     # Assume roi_mask is a boolean 3D array
 
     # Initialize a dictionary to store the maximum mean value for each z-coordinate
     max_values_per_slice = {z: {'max_mean': 0, 'position': None} for z in range(image_stack.shape[0])}
-    def process_index(index):
-        z, y, x = index
-        if can_place_sphere(index, radius_pixels):
-            mask = create_3d_spherical_mask(index, radius_pixels, image_stack.shape)
-            mean_value = get_mean_value(image_stack, mask)
-            return z, mean_value, (y, x)
-        return None
+    # Convert roi_masks to a NumPy array if not already
+    roi_masks_array = np.array(roi_masks, dtype=bool)
 
-    # Use ThreadPoolExecutor to parallelize the processing
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        futures = [executor.submit(process_index, index) for index in np.argwhere(roi_masks_array)]
-        for future in concurrent.futures.as_completed(futures):
-            result = future.result()
-            if result:
-                z, mean_value, position = result
-                if mean_value > max_values_per_slice[z]['max_mean']:
-                    max_values_per_slice[z]['max_mean'] = mean_value
-                    max_values_per_slice[z]['position'] = position
+    # Get all (z, y, x) indices in the ROI
+    roi_indices = np.argwhere(roi_masks_array)
 
-    if False:
-        # Loop through each index where roi_masks is True
-        for z, y, x in np.argwhere(roi_masks_array):
-            #if 1 <= z <= 6:  # Only consider z values from 1 to 6 (the number of spheres)
-                index = (z, y, x)
-                if can_place_sphere(index, radius_pixels):
-                    mask = create_3d_spherical_mask(index, radius_pixels, image_stack.shape)
-                    mean_value = get_mean_value(image_stack, mask)
-                    if mean_value > max_values_per_slice[z]['max_mean']:
-                        max_values_per_slice[z]['max_mean'] = mean_value
-                        max_values_per_slice[z]['position'] = (y, x)  # Store the y, x position for the max value
+    # Call the Numba-compiled function
+    max_means, positions_y, positions_x = compute_c_peak_numba(
+        roi_indices,     # shape (N, 3)
+        image_stack,     # shape (depth, height, width)
+        cur_index,       # int offset for z
+        radius_pixels    # float
+    )
 
+    # Update the dictionary so it reflects the new Numba results:
+    for z in range(image_stack.shape[0]):
+        max_values_per_slice[z]['max_mean'] = max_means[z]
+        max_values_per_slice[z]['position'] = (positions_y[z], positions_x[z])
+
+    # Now the dictionary actually holds the correct SUV_peaks
+    for z, details in max_values_per_slice.items():
+        print(f"SUV_peak in sphere {z}: {details['max_mean']} at position {details['position']}")
     # Print results for each slice
     for z, details in max_values_per_slice.items():
         print(f"SUV_peak in sphere {z}: {details['max_mean']} at position {details['position']}")
@@ -968,6 +959,65 @@ def suv_peak_with_spherical_voi():
     
     plot_suv_peak_against_sphere_size(suv_peak_values, sphere_sizes)
     return max_values_per_slice
+
+@njit
+def compute_c_peak_numba(roi_indices, image_stack,
+                         cur_index, radius_pixels):
+    """
+    For each (z, y, x) in roi_indices, create a sphere mask and compute
+    the mean. Track the max mean for each z-plane.
+    
+    roi_indices : array of shape (N, 3) from np.argwhere(...)
+    image_stack : 3D NumPy float array
+    cur_index   : int offset added to z
+    radius_pixels : float radius of sphere in pixels
+    
+    Returns:
+        max_means     : 1D float array of shape (depth,)
+        positions_y   : 1D int array of shape (depth,)
+        positions_x   : 1D int array of shape (depth,)
+    
+    For each z-plane, we store the maximum mean encountered, and
+    the (y, x) position at which it occurred.
+    """
+    depth, height, width = image_stack.shape
+    
+    # Arrays to store the max mean and the best (y,x) for each slice z
+    max_means = np.zeros(depth, dtype=np.float64)
+    positions_y = np.zeros(depth, dtype=np.int64)
+    positions_x = np.zeros(depth, dtype=np.int64)
+    
+    # We will assume that an uninitialized position is (-1, -1).
+    for z_ in range(depth):
+        positions_y[z_] = -1
+        positions_x[z_] = -1
+    
+    # Loop through ROI indices
+    for i in range(roi_indices.shape[0]):
+        z = roi_indices[i, 0]
+        y = roi_indices[i, 1]
+        x = roi_indices[i, 2]
+        
+        # Adjust z-center by cur_index
+        z_center = z + cur_index
+        
+        # 1) Create spherical mask
+        mask = create_3d_spherical_mask_numba(
+            z_center, y, x,
+            radius_pixels,
+            depth, height, width
+        )
+        
+        # 2) Compute mean
+        mean_val = get_mean_value_numba(image_stack, mask)
+        
+        # 3) Update if this is the best so far for slice z
+        if mean_val > max_means[z]:
+            max_means[z] = mean_val
+            positions_y[z] = y
+            positions_x[z] = x
+    
+    return max_means, positions_y, positions_x
 
 def plot_suv_peak_against_sphere_size(suv_peak_values, sphere_sizes):
     global current_index, loaded_folder_path
@@ -1102,6 +1152,25 @@ def create_3d_spherical_mask(center, radius_pixels, shape):
     mask = distance <= radius_pixels
     return mask
 
+@njit
+def create_3d_spherical_mask_numba(z_center, y_center, x_center, radius_pixels, depth, height, width):
+    """
+    Create a 3D spherical mask (Numba-compatible).
+    (z_center, y_center, x_center) is the center of the sphere in the 3D image.
+    radius_pixels: float radius of the sphere in pixels.
+    (depth, height, width): the shape of the 3D image stack.
+    """
+    mask = np.zeros((depth, height, width), dtype=np.bool_)
+    for z in range(depth):
+        for y in range(height):
+            for x in range(width):
+                dz = z - z_center
+                dy = y - y_center
+                dx = x - x_center
+                dist_sq = dz*dz + dy*dy + dx*dx
+                if dist_sq <= radius_pixels * radius_pixels:
+                    mask[z, y, x] = True
+    return mask
 
 def build_image_stack():
     global dicom_images
@@ -1167,12 +1236,13 @@ def process_rois_for_predefined_centers(roi_or_voi = 'roi'):
     # centers = [(200, 165), (189, 190), (160, 194), (144, 171), (154, 146), (183, 142)] 
     if roi_or_voi == 'roi':
         # Centers of 6 2D spheres with a 512x512 image size, increasing sphere sizes
-        #centers = [(current_index, 212, 273), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]
-        centers = [(current_index, 210, 271), (current_index, 217, 228), (current_index, 257, 214), (current_index, 289, 241), (current_index, 282, 282), (current_index, 242, 298)]
+        # Centers for scan from 05.11.2024
+        centers = [(current_index, 212, 273), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]
+        #centers = [(current_index, 210, 271), (current_index, 217, 228), (current_index, 257, 214), (current_index, 289, 241), (current_index, 282, 282), (current_index, 242, 298)]
     else:
         # Centers of 6 3D spheres with a 512x512 image size, increasing sphere sizes
-        #centers = [(current_index, 212, 273), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]
-        centers = [(current_index, 210, 271), (current_index, 217, 228), (current_index, 257, 214), (current_index, 289, 241), (current_index, 282, 282), (current_index, 242, 298)]
+        centers = [(current_index, 212, 273), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]
+        #centers = [(current_index, 210, 271), (current_index, 217, 228), (current_index, 257, 214), (current_index, 289, 241), (current_index, 282, 282), (current_index, 242, 298)]
     
     radius = 15  # Covers even the biggest sphere with a diameter of 18.5 pixels (times approx. 2 mm pixel_spacing = 37 mm sphere)
     roi_masks = []
@@ -1220,20 +1290,6 @@ def process_rois_for_predefined_centers(roi_or_voi = 'roi'):
         #roi_pixels.append(roi_coords)
     display_dicom_image(selected_slice, canvas, ax)
     #display_dicom_image(selected_slice, canvas, ax, roi_pixels=roi_pixels)
-  
-    if False:
-        for center in centers:
-            # Assuming a threshold of 40% of the max value within each sphere's bounding box
-            local_max = np.max(selected_slice[
-                max(0, center[0] - radius):min(selected_slice.shape[0], center[0] + radius),
-                max(0, center[1] - radius):min(selected_slice.shape[1], center[1] + radius)
-            ])
-            threshold = 0.4 * local_max
-            voi_mask = create_isocontour_roi(selected_slice, center, radius, threshold)
-            print(f"VOI {len(vois) + 1} - Threshold: {threshold:.2f}, Max Value: {local_max:.2f}, Number of Pixels: {np.sum(voi_mask)}")
-            vois.append(voi_mask)
-    
-        display_dicom_image(selected_slice, canvas, ax, voi_masks=vois)
     # Initialize an array to store the mean values of the different VOIs
     mean_values = []
     if roi_or_voi == 'voi':
