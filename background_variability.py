@@ -459,7 +459,8 @@ def plot_ir_values(ir_values):
     sphere_sizes = [10, 13, 17, 22, 28, 37]
     #legend_entries = ['2 iterations, Gauss 3x3', '2 iterations, Gauss 5x5', '2 iterations, Gauss 7x7', '3 iterations, Gauss 3x3', '3 iterations, Gauss 5x5', '3 iterations, Gauss 7x7', '4 iterations, Gauss 3x3', '4 iterations, Gauss 5x5', '4 iterations, Gauss 7x7']
     #legend_entries = ['Absolute Scattering, 2i', 'Relative Scattering, 2i', 'Absolute Scattering, 3i', 'Relative Scattering, 3i', 'Absolute Scattering, 4i', 'Relative Scattering, 4i']
-    legend_entries = ['2i, Gauss 3x3', '2i, Gauss 5x5', '2i, Gauss 7x7', '3i, Gauss 3x3', '3i, Gauss 5x5', '3i, Gauss 7x7']
+    #legend_entries = ['2i, Gauss 3x3', '2i, Gauss 5x5', '2i, Gauss 7x7', '3i, Gauss 3x3', '3i, Gauss 5x5', '3i, Gauss 7x7']
+    legend_entries = ['1i', '2i', '3i', '4i', '5i', '6i', '7i', '8i']
     # Define line styles
     line_styles = ['-', '--', '-.', '-', '--', '-.', '-', '--', '-.']
     #line_styles = ['-', '--', '-', '--', '-', '--']
@@ -472,7 +473,7 @@ def plot_ir_values(ir_values):
     plt.xlabel('Sphere Sizes [mm]')
     plt.ylabel('Image Roughness [%]')
     plt.title('Image Roughness in the Background vs Sphere Size')
-    plt.legend(legend_entries[0:iteration_count], title=f'Number of iterations i: ')
+    plt.legend(legend_entries[0:iteration_count], title=f'Number of\niterations i:')
     plt.grid(True)
     plt.xticks(sphere_sizes)
     plt.ylim(0, 10)
@@ -502,19 +503,47 @@ def plot_ir_values(ir_values):
     
 def plot_snr_values():
     # SNR calculation adapted from Tong et al. 2010 https://doi.org/10.1109/NSSMIC.2009.5401574 but with SUV_N=40 instead of SUV_mean
-    global iteration_count
+    global iteration_count, roi_masks, current_index
 
-    flag_use_suv_n = False
-    
+    flag_use_suv_n = True
+    flag_scan_to_be_used = 1 #1: first scan with no background (10.10.2024), 2: second scan with background (05.11.2024)
+
     sphere_sizes = [10, 13, 17, 22, 28, 37]
+    
     # Do not delete or change these values. If you want to update the values, comment the old values out.
+    SUV_N = [
+    # SUV_N values for N = 4 for NEMA IQ scan with no background activity (10.10.2024) and spherical VOIs
+        [24215.00, 28108.00, 29569.00, 30052.00, 32183.75, 32284.00], #NEMA_IQ_01
+        [21633.50, 25305.00, 27164.50, 28918.00, 31995.00, 31919.50], #NEMA_IQ_02
+        [20229.50, 24343.75, 26155.00, 28590.25, 32167.75, 31769.00], #NEMA_IQ_03
+        [19414.50, 23938.50, 25634.75, 28299.00, 32496.50, 31819.25], #NEMA_IQ_04
+        [18528.00, 23277.25, 24906.50, 27613.50, 32210.50, 31422.00], #NEMA_IQ_05
+        [17828.75, 22674.25, 24233.50, 26976.00, 31807.00, 30987.50], #NEMA_IQ_06
+        [17374.75, 22231.25, 23721.25, 26574.50, 31497.75, 30702.75], #NEMA_IQ_07
+        [17014.25, 21907.50, 23342.75, 26409.50, 31301.25, 30529.75]  #NEMA_IQ_08
+    ]
+    '''
+    SUV_N = [
+    # SUV_N values for N = 4 for NEMA IQ scan with 1:4 sphere-to-background ratio (05.11.2024) and spherical VOIs
+        [12058.25, 19449.25, 26032.50, 28635.75, 30397.75, 32667.25], #NEMA_IQ_01
+        [14997.75, 25709.50, 31388.75, 31180.00, 32540.00, 32506.50], #NEMA_IQ_02
+        [17425.25, 28719.00, 32630.00, 31184.50, 32319.00, 32343.50], #NEMA_IQ_03
+        [18954.75, 29795.00, 32363.00, 30926.00, 32084.25, 31894.75], #NEMA_IQ_04
+        [20277.50, 30514.50, 32269.25, 31059.75, 32369.25, 31975.75], #NEMA_IQ_05
+        [21265.50, 30839.75, 32276.25, 31209.50, 32550.75, 32238.50], #NEMA_IQ_06
+        [21858.50, 30721.00, 32063.75, 31061.50, 32528.50, 32293.50], #NEMA_IQ_07
+        [22083.25, 30214.75, 31539.25, 30633.75, 32366.25, 32053.50]  #NEMA_IQ_08
+    ]
+    '''
     # SUV_N values for N = 40 for NEMA IQ scan with background activity from the 05.11.2024
+    '''
     SUV_N = [
     # Scan from the 05.11.2024 with a 1:4 background activity ratio
             [16082.25, 26268.30, 30999.67, 30034.17, 31217.08, 31088.40], # NEMA_IQ_04
             [14750.90, 24351.83, 30816.50, 31237.28, 31641.05, 31745.53], # NEMA_IQ_04_a
             [13325.77, 21627.67, 28845.83, 31810.90, 32000.35, 32332.00]  # NEMA_IQ_04_b
     ]
+    '''
     '''
     SUV_N = [
         [13341.70, 23084.22, 29678.75, 30543.72, 31378.25, 31764.33], # NEMA_IQ_02
@@ -555,7 +584,10 @@ def plot_snr_values():
         [17977.90, 26831.17, 30076.20, 29603.53, 31029.97, 31203.60]  #NEMA_IQ_08
     ]
     '''
-    true_activity_concentration = 26166.28 #Calculated the theoretical activity at scan start [Bq/mL] (Daniel, 05. Nov. 2024 11:36 am)
+    if flag_scan_to_be_used == 1:
+        true_activity_concentration = 28136.08 #Calculated the theoretical activity at scan start (Daniel, 10. Oct. 2024 12:22 pm)
+    elif flag_scan_to_be_used == 2:
+        true_activity_concentration = 26166.28 #Calculated the theoretical activity at scan start [Bq/mL] (Daniel, 05. Nov. 2024 11:36 am)
 
     if flag_use_suv_n:
         # Calculate the SNR for each sphere size
@@ -569,13 +601,16 @@ def plot_snr_values():
         nsrs= [] # Noise-to-Signal Ratios
         image_stack = build_image_stack()
         shape = image_stack.shape
+        selected_slice = image_stack[current_index]
         
-        # Centers for second scan in November
-        #centers = [(current_index, 212, 273), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]
+        if flag_scan_to_be_used == 1:
+            # Centers for first scan in October
+            centers = [(current_index, 210, 271), (current_index, 218, 229), (current_index, 257, 214), (current_index, 290, 242), (current_index, 282, 283), (current_index, 242, 298)]            
+        elif flag_scan_to_be_used == 2:
+            # Centers for second scan in November
+            centers = [(current_index, 212, 273), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]
+            
         
-        # Centers for first scan in October
-        centers = [(current_index, 210, 271), (current_index, 218, 229), (current_index, 257, 214), (current_index, 290, 241), (current_index, 282, 283), (current_index, 243, 298)]            
-    
         for i, center in enumerate(centers):
             #Following line commented out because isocontour threshold didn't perfectly delineate the sphere
             #roi_mask_temp = create_isocontour_voi_3d(image_stack, center, radius, threshold)
@@ -595,15 +630,16 @@ def plot_snr_values():
             mean_values.append(mean_activity)
             nsrs.append(nsr)
 
+    display_dicom_image(selected_slice, canvas, ax)
     print(f"NSR values: {nsrs}")
     nsrs = np.array(nsrs)
     # Signal to Noise ratio, normalized to the true activity concentration
     snr = 1 - nsrs
     print(f"SNR values: {snr}")
-    #legend_entries = ['1 iteration', '2 iterations', '3 iterations', '4 iterations', '5 iterations', '6 iterations', '7 iterations', '8 iterations']
+    legend_entries = ['1i', '2i', '3i', '4i', '5i', '6i', '7i', '8i']
     #legend_entries = ['2 iterations, Gauss 3x3', '2 iterations, Gauss 5x5', '2 iterations, Gauss 7x7', '3 iterations, Gauss 3x3', '3 iterations, Gauss 5x5', '3 iterations, Gauss 7x7', '4 iterations, Gauss 3x3', '4 iterations, Gauss 5x5', '4 iterations, Gauss 7x7']
     #legend_entries = ['Absolute Scattering, 2i', 'Relative Scattering, 2i', 'Absolute Scattering, 3i', 'Relative Scattering, 3i', 'Absolute Scattering, 4i', 'Relative Scattering, 4i']
-    legend_entries = ['4i, Gauss 3x3', '4i, Gauss 5x5', '4i, Gauss 7x7']
+    #legend_entries = ['4i, Gauss 3x3', '4i, Gauss 5x5', '4i, Gauss 7x7']
     # Define line styles
     #line_styles = ['-', '--', '-', '--', '-', '--']
     line_styles = ['-', '--', '-.', '-', '--', '-.', '-', '--', '-.']
@@ -624,13 +660,13 @@ def plot_snr_values():
     #for i, snr_row in enumerate(snr):
     #    plt.plot(sphere_sizes, snr_row, marker='o', zorder=3) #, label=f'{i + 1} iteration{"s" if i > 0 else ""}')
         #legend_entries.append(f'{i + 1} iteration{"s" if i > 0 else ""}')
-    plt.xlabel('Sphere Sizes [mm]')
+    plt.xlabel('Sphere Size [mm]')
     plt.ylabel('SNR [1]')
     plt.title('Signal-to-Noise Ratio vs Sphere Size')
-    plt.legend(legend_entries, title=f'Number of iterations i: ')
+    plt.legend(legend_entries, title=f'Number of\niterations i:')
     plt.grid(True)
     plt.xticks(sphere_sizes)
-    plt.ylim(0.4, 1)
+    plt.ylim(0.3, 1)
     #plt.legend(recon_names, title=f'Number of iterations: ')
     plt.draw()
 
@@ -638,9 +674,9 @@ def plot_snr_values():
     plt.show(block=False)
 
     save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//SNR"
-    png_path = os.path.join(save_path, 'NEMA_IQ_04_a-b_SNR_vs_sphere_size_calculated_with_SUV_40.png')
-    pdf_path = os.path.join(save_path, 'NEMA_IQ_04_a-b_SNR_vs_sphere_size_calculated_with_SUV_40.pdf')
-    pickle_path = os.path.join(save_path, 'NEMA_IQ_04_a-b_SNR_vs_sphere_size_calculated_with_SUV_40.pickle')
+    png_path = os.path.join(save_path, 'NEMA_IQ_01-08_1_to_4_background_scan_SNR_vs_sphere_size_calculated_with_c_mean.png')
+    pdf_path = os.path.join(save_path, 'NEMA_IQ_01-08_1_to_4_background_scan_SNR_vs_sphere_size_calculated_with_c_mean.pdf')
+    pickle_path = os.path.join(save_path, 'NEMA_IQ_01-08_1_to_4_background_scan_SNR_vs_sphere_size_calculated_with_c_mean.pickle')
     answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here:\n{save_path}\nas:\n{png_path}?")
     if answer: 
         # Save the plot as PNG, PDF, and pickle files        
@@ -773,9 +809,13 @@ def get_mean_value_numba(image_stack, mask):
 
 def calculate_SUV_N():
     global dicom_images, current_index, roi_masks, iteration_count, loaded_folder_path
+
+    flag_calulate_suv_peak = False # Set to True if you want to calculate the SUV_peak with a spherical VOI, but computationally very expensive (5-10 min per SUV_peak value)
+
+    if flag_calulate_suv_peak:
+        process_rois_for_predefined_centers('roi') # initialize the 2D ROI mask
+        suv_peak_values = suv_peak_with_spherical_voi() # Get the SUV_peak with 2D ROI mask (3D is computationally too expensive)
     
-    process_rois_for_predefined_centers('roi') # initialize the 2D ROI mask
-    suv_peak_values = suv_peak_with_spherical_voi() # Get the SUV_peak with 2D ROI mask (3D is computationally too expensive)
     process_rois_for_predefined_centers('voi') # update the 2D ROI mask to be a 3D VOI mask for SUV_N calculation
     
     sphere_sizes = [10, 13, 17, 22, 28, 37]  # Sphere sizes
@@ -784,35 +824,39 @@ def calculate_SUV_N():
     image_stack = build_image_stack()
     roi_masks_array = np.array(roi_masks)
     print(f"Shape of roi_masks_array: {roi_masks_array.shape}")
-    while True:
-        # Extract the relevant slice from the image stack
-        #current_slice = image_stack[current_index]
-        # Extract the top N pixel values where roi_masks is True
-        # Plot for SUV_N vs N for different spheres
-        # Loop over each sphere in roi_masks_array
-        for i, sphere_size in enumerate(sphere_sizes):
-            masked_values = image_stack[roi_masks_array[i]]
-            if masked_values.size == 0:
-                print(f"No masked values found for sphere size {sphere_size} mm.")
+    #while True:
+    # Extract the relevant slice from the image stack
+    #current_slice = image_stack[current_index]
+    # Extract the top N pixel values where roi_masks is True
+    # Plot for SUV_N vs N for different spheres
+    # Loop over each sphere in roi_masks_array
+    N_values = [4] + list(range(5, 45, 5))  # includes 4, and then 5, 10, ... 40
+    for i, sphere_size in enumerate(sphere_sizes):
+        masked_values = image_stack[roi_masks_array[i]]
+        if masked_values.size == 0:
+            print(f"No masked values found for sphere size {sphere_size} mm.")
+            continue
+        for N in N_values:
+            if masked_values.size < N:
+                print(f"Not enough values for N={N} for sphere size {sphere_size} mm.")
+                results[sphere_size].append(np.nan)
                 continue
-            for N in range(5, 45, 5):  # Loop over N values from 5 to 40 in increments of 5
-                if masked_values.size < N:
-                    print(f"Not enough values for N={N} for sphere size {sphere_size} mm.")
-                    results[sphere_size].append(np.nan)
-                    continue
-                top_N_values = np.partition(masked_values, -N)[-N:]
-                mean_top_N = np.mean(top_N_values)
-                results[sphere_size].append(mean_top_N)
-                print(f"SUV_{N} for sphere size {sphere_size} mm: {mean_top_N:.2f} Bq/mL")
-            mean_value = np.mean(masked_values)
-            mean_values.append(mean_value)
+            top_N_values = np.partition(masked_values, -N)[-N:]
+            mean_top_N = np.mean(top_N_values)
+            results[sphere_size].append(mean_top_N)
+            print(f"SUV_{N} for sphere size {sphere_size} mm: {mean_top_N:.2f} Bq/mL")
+        mean_value = np.mean(masked_values)
+        mean_values.append(mean_value)
+
+    if flag_calulate_suv_peak:
         # Update plot
-        load_more_data = plot_SUV_N(sphere_sizes, results, suv_peak_values, mean_values) # , suv_peak_values)
+        load_more_data = plot_SUV_N(sphere_sizes, results, suv_peak_values, mean_values)
         #load_more_data = True
-        if not load_more_data:
-            break
-        # More data to plot
-        iteration_count += 1
+        if load_more_data:
+            #break
+            # More data to plot
+            iteration_count += 1
+        
 
 def plot_SUV_N(sphere_sizes, results, suv_peak_values, mean_values):
     global SUV_max_values, loaded_folder_path, iteration_count
@@ -1267,6 +1311,9 @@ def create_isocontour_voi_3d(img_array, center, radius, threshold):
 
 def process_rois_for_predefined_centers(roi_or_voi = 'roi'):
     global roi_masks, current_index, SUV_max_values, dicom_images
+
+    flag_scan_to_be_used = 2 # 1 for scan from 10.10.2024 (no background) and 2 for scan from 05.11.2024 (1:4 sphere-to-background activity ratio)
+
     image_stack = build_image_stack()
     shape = image_stack.shape
     selected_slice = image_stack[current_index]
@@ -1275,16 +1322,13 @@ def process_rois_for_predefined_centers(roi_or_voi = 'roi'):
     print(f"Shape of selected slice: {selected_slice.shape}")
     # Centers of 6 2D spheres with a 344x344 image size, increasing sphere sizes
     # centers = [(200, 165), (189, 190), (160, 194), (144, 171), (154, 146), (183, 142)] 
-    if roi_or_voi == 'roi':
-        # Centers of 6 2D spheres with a 512x512 image size, increasing sphere sizes
-        # Centers for scan from 05.11.2024
+    if flag_scan_to_be_used == 1:
+        # Centers for first scan in October
+        centers = [(current_index, 210, 271), (current_index, 218, 229), (current_index, 257, 214), (current_index, 290, 242), (current_index, 282, 283), (current_index, 242, 298)]            
+    elif flag_scan_to_be_used == 2:
+        # Centers for second scan in November
         centers = [(current_index, 212, 273), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]
-        #centers = [(current_index, 210, 271), (current_index, 217, 228), (current_index, 257, 214), (current_index, 289, 241), (current_index, 282, 282), (current_index, 242, 298)]
-    else:
-        # Centers of 6 3D spheres with a 512x512 image size, increasing sphere sizes
-        centers = [(current_index, 212, 273), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]
-        #centers = [(current_index, 210, 271), (current_index, 217, 228), (current_index, 257, 214), (current_index, 289, 241), (current_index, 282, 282), (current_index, 242, 298)]
-    
+             
     radius = 15  # Covers even the biggest sphere with a diameter of 18.5 pixels (times approx. 2 mm pixel_spacing = 37 mm sphere)
     roi_masks = []
     # roi_pixels = []  # Initialize roi_pixels as an empty list
@@ -1297,11 +1341,12 @@ def process_rois_for_predefined_centers(roi_or_voi = 'roi'):
             max(0, y_center - radius):min(selected_slice.shape[0], y_center + radius),
             max(0, x_center - radius):min(selected_slice.shape[1], x_center + radius)
         ])
-        #true_activity_concentration = 28136.08 #Calculated the theoretical activity at scan start (Daniel, 10. Oct. 2024 12:22 pm)
-        true_activity_concentration = 26166.28 #Calculated the theoretical activity at scan start (Daniel, 05. Nov. 2024 11:36 am)
-        # Calculate the radius in pixels (assuming isotropic pixels)
+        if flag_scan_to_be_used == 1:
+            true_activity_concentration = 28136.08 #Calculated the theoretical activity at scan start (Daniel, 10. Oct. 2024 12:22 pm)
+        elif flag_scan_to_be_used == 2:
+            true_activity_concentration = 26166.28 #Calculated the theoretical activity at scan start (Daniel, 05. Nov. 2024 11:36 am)
         
-
+        # Calculate the radius in pixels (assuming isotropic pixels)
         threshold = 0.41 * true_activity_concentration#local_max 
         print(f"Threshold for sphere {i + 1}: {threshold:.2f}")
         if roi_or_voi == 'roi':
