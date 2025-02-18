@@ -102,6 +102,27 @@ def create_scatterplot(df, k_variables):
         # Convert to numeric and drop rows with NaN in k_variable
         df[k_variable] = pd.to_numeric(df[k_variable], errors="coerce")
         df = df.dropna(subset=[k_variable])
+        grouped = df.groupby("Reconstruction_Method")[k_variable]
+        mean_ = grouped.mean()
+        std_ = grouped.std()
+        count_ = grouped.count()
+
+        sem_ = std_ / np.sqrt(count_)
+        ci95_ = 1.96 * sem_
+
+        # Print the mean and 95% CI for each recon
+        print(f"Mean {k_variable} by Reconstruction (± 95% CI):")
+        print(mean_)
+        print(ci95_)
+
+        # Optionally, create a bar plot
+        plt.figure(figsize=(6, 4))
+        plt.bar(mean_.index, mean_.values, yerr=ci95_.values, capsize=5)
+        plt.title(f"Mean {k_variable} by Reconstruction (± 95% CI)")
+        plt.xticks(rotation=45)
+        plt.ylabel(k_variable)
+        plt.tight_layout()
+        plt.show()
 
         # Pivot
         pivot_df = df.pivot(index="Patient_Number", 
@@ -131,6 +152,8 @@ def create_scatterplot(df, k_variables):
         if pivot_df.empty:
             print(f"No valid rows for {k_variable} after dropping NaNs.")
             continue
+        # We'll store the p-values here
+        pvals = []
 
         # Loop over every column except "04"
         for col in pivot_df.columns:
@@ -147,9 +170,7 @@ def create_scatterplot(df, k_variables):
             x = df_pair["04"]
             # y is the current column
             y = df_pair[col]
-            print(f"x ({k_variable} for '04'):\n", x)
-            print(f"y ({k_variable} for '{col}'):\n", y)
-            print(f"median of y ({k_variable} for '{col}'): {y.median()}")
+
             # Perform linear regression
             result = linregress(x, y)
 
@@ -161,11 +182,16 @@ def create_scatterplot(df, k_variables):
             std_err = result.stderr           # Standard error of the slope
 
             # Print them out or log them
-            print(f"Slope: {slope}")
-            print(f"Intercept: {intercept}")
-            print(f"R-squared: {r_squared}")
-            print(f"p-value: {p_value}")
-            print(f"Slope std. error: {std_err}")
+            print("-------------------------------------")
+            print(f"Comparing '04' vs '{col}' for {k_variable}")
+            print(f"  Slope:        {slope}")
+            print(f"  Intercept:    {intercept}")
+            print(f"  R-squared:    {r_squared}")
+            print(f"  p-value:      {p_value}")
+            print(f"  std. error:   {std_err}")
+
+            # Append p-value to our list
+            pvals.append(p_value)
             # Scatter plot using Seaborn
             sns.scatterplot(x=x, y=y, label=f"04 vs {col}. R²={r_squared:.3f}")
 
@@ -221,6 +247,12 @@ def create_scatterplot(df, k_variables):
             sns.despine()
             #plt.grid(True)
             #plt.tight_layout()
+        # After we finish looping all columns, compute the mean p-value (if pvals is not empty).
+        if pvals:
+            mean_p = np.mean(pvals)
+            print(f"Mean p-value for {k_variable} across all recon comparisons: {mean_p:.6g}")
+        else:
+            print(f"No p-values found for {k_variable}.")
         # Show the plot to the user
         plt.show(block=False)
         save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Kinetic Modelling//Scatterplots//AIF"

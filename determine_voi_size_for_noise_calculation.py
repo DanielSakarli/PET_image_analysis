@@ -48,7 +48,8 @@ recovery_coefficients = []
 dicom_images = []  # List to store DICOM images
 current_index = 0  # Current slice index
 background_mean_values = [] # List to store the background activity conc. according to NEMA standard
-
+fig = None # For line-profile plotting to plot the new line-profile in the same figure
+axs = None # For line-profile plotting to plot the new line-profile in the same figure
 # Function to load DICOM images from a directory
 def load_dicom_images(directory):
     global dicom_images
@@ -809,7 +810,7 @@ def can_place_sphere(center, radius_pixels):
         return False
 
 def noise_vs_sphere_size():
-    global dicom_images, roi_masks
+    global dicom_images, roi_masks, fig, axs
     # Shape of the 3D image stack
     image_stack = build_image_stack()
     shape = image_stack.shape
@@ -836,16 +837,23 @@ def noise_vs_sphere_size():
         centers = [(current_index, 212, 265)]
     else:
         # NEMA IQ phantom centers for second scan from the 05.11.2024
-        #centers = [(current_index, 212, 273), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]
+        centers = [(current_index, 212, 273), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]
         
         # NEMA IQ phantom centers for first scan from the 10.10.2024
-        centers = [(current_index, 210, 271), (current_index, 218, 228), (current_index, 257, 214), (current_index, 289, 241), (current_index, 282, 282), (current_index, 242, 297)]            
+        #centers = [(current_index, 210, 271), (current_index, 218, 228), (current_index, 257, 214), (current_index, 289, 241), (current_index, 282, 282), (current_index, 242, 297)]            
     
     # Centers of 6 3D spheres with a 344x344 image size, increasing sphere sizes
     # centers = [(0, 142, 183), (0, 146, 154), (0, 172, 144), (0, 194, 161), (0, 190, 189), (0, 165, 200)] 
     
-    plot_line_profiles(image_stack, centers)
-
+    ###################### Line-Profiles ######################
+    # Check if figure for line profiles already exists
+    #if fig is None:
+    #    fig, axs = plot_line_profiles(image_stack, centers)
+    #else:
+        #if figure already exists, plot the new line-profiles over the existing ones
+    #    fig, axs = plot_line_profiles(image_stack, centers, fig, axs)
+    
+    
     # VOI radius in pixels for plot_mean_vs_sphere_size()
     #voi_sizes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13] # intentionally goes over the borders of the actual sphere size to see how the noise and mean behave over the sphere size border
     
@@ -878,9 +886,9 @@ def noise_vs_sphere_size():
     roi_masks = masks # Save the 3D masks in global roi_masks to display them later on
     
     ir_values = get_ir_value(masks, sphere_sizes) 
-    std_values = get_std_values(image_stack, masks, sphere_sizes) #If get_ir_value is commented out: include iteration_count += 1 in get_std_values
+    #std_values = get_std_values(image_stack, masks, sphere_sizes) #If get_ir_value is commented out: include iteration_count += 1 in get_std_values
     
-    print(f"IR values: {ir_values}")
+    #print(f"IR values: {ir_values}")
     
     #ture_activity_concentration = 28136.08 # calculated the activity with the measured injected_activity and the decay constant of F-18 (in Bq)
     true_activity_concentration = 26166.28 # [Bq/mL]. Scan from the 05.11.2024, scan start: 11:36:57 am
@@ -1080,7 +1088,7 @@ def plot_ir_values(ir_values, sphere_sizes):
     global iteration_count
     
     #legend_entries = ['2i, Absolute Scattering', '2i, Relative Scattering', '3i, Absolute Scattering', '3i, Relative Scattering', '4i, Absolute Scattering', '4i, Relative Scattering']
-    legend_entries = ['1 iteration', '2 iterations', '3 iterations', '4 iterations', '5 iterations', '6 iterations', '7 iterations', '8 iterations']
+    legend_entries = ['1i', '2i', '3i', '4i', '5i', '6i', '7i', '8i']
     #legend_entries = ['2i, Gauss 3x3', '2i, Gauss 5x5', '2i, Gauss 7x7', '3i, Gauss 3x3', '3i, Gauss 5x5', '3i, Gauss 7x7', '4i, Gauss 3x3', '4i, Gauss 5x5', '4i, Gauss 7x7']
     # Define line styles
     #line_styles = ['-', '--', '-.', '-', '--', '-.', '-', '--', '-.']
@@ -1099,8 +1107,8 @@ def plot_ir_values(ir_values, sphere_sizes):
     plt.plot(sphere_sizes, ir_values, marker='o')#, linestyle=line_styles[iteration_count - 1], color=colors[iteration_count - 1])
     plt.xlabel('Spherical VOI Diameter [mm]')
     plt.ylabel('Image Roughness [%]')
-    plt.title('Image Roughness in Hot Background close to a 10 mm Hot Sphere vs VOI Size')
-    plt.legend(legend_entries[0:iteration_count])#, title=f'Number of iterations i: ')
+    plt.title('Image Roughness vs Sphere Size')
+    plt.legend(legend_entries[0:iteration_count], title="Number of\niterations i:")#, title=f'Number of iterations i: ')
     plt.ylim(0, 1)
     plt.grid(True)
     plt.xticks(sphere_sizes)
@@ -1111,9 +1119,9 @@ def plot_ir_values(ir_values, sphere_sizes):
     plt.show(block=False)
 
     save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Image Roughness"
-    png_path = os.path.join(save_path, 'NEMA_IQ_01_08_Image_Roughness_with_spherical_VOI_in_background_close_to_10mm_sphere_vs_sphere_size.png')
-    pdf_path = os.path.join(save_path, 'NEMA_IQ_01_08_Image_Roughness_with_spherical_VOI_in_background_close_to_10mm_sphere_vs_sphere_size.pdf')
-    pickle_path = os.path.join(save_path, 'NEMA_IQ_01_08_Image_Roughness_with_spherical_VOI_in_background_close_to_10mm_sphere_vs_sphere_size.pickle')
+    png_path = os.path.join(save_path, 'NEMA_IQ_01_08_1_to_4_activity_ratio_Image_Roughness_with_c_mean_vs_sphere_size.png')
+    pdf_path = os.path.join(save_path, 'NEMA_IQ_01_08_1_to_4_activity_ratio_Image_Roughness_with_c_mean_vs_sphere_size.pdf')
+    pickle_path = os.path.join(save_path, 'NEMA_IQ_01_08_1_to_4_activity_ratio_Image_Roughness_with_c_mean_vs_sphere_size.pickle')
         
     answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here:\n{save_path}\nas\n{png_path}?")
     if answer: 
@@ -1144,7 +1152,7 @@ def plot_mean_vs_sphere_size(voi_sizes, mean_values):
     iteration_count += 1
 
 
-def plot_line_profiles(image_stack, centers):
+def plot_line_profiles(image_stack, centers, fig=None, axs=None):
     """
     Extracts and plots line profiles through the centers of spheres in z, y, and x directions.
 
@@ -1153,8 +1161,15 @@ def plot_line_profiles(image_stack, centers):
     centers (list): List of tuples containing the centers of spheres.
     pixel_spacing (float): Pixel spacing to convert indices to mm.
     """
-    global dicom_images, loaded_folder_path
-    fig, axs = plt.subplots(3, len(centers), figsize=(15, 10))
+    global dicom_images, loaded_folder_path, iteration_count
+    iteration_count += 1
+    colors = ['tab:blue', 'tab:red', 'tab:gray']
+
+    # If no figure/axes are passed in, create a new one
+    if fig is None or axs is None:
+        # 3 rows (X, Y, Z) and len(centers) columns
+        fig, axs = plt.subplots(3, len(centers), figsize=(15, 10))
+
     pixel_spacing = dicom_images[0][0x0028, 0x0030].value
     slice_thickness = dicom_images[0][0x0018, 0x0050].value
     sphere_sizes = [10, 13, 17, 22, 28, 37]
@@ -1163,7 +1178,7 @@ def plot_line_profiles(image_stack, centers):
     # User enters two x and y values to get the line profile
     # The line profiles of the respective sphere(s) are then chosen
     # and sent to the method recovery_coefficient_correction()
-
+    #plt.figure(f'Line-profiles over Sphere Sizes')
     for i, center in enumerate(centers):
         z_center, y_center, x_center = center
 
@@ -1220,26 +1235,26 @@ def plot_line_profiles(image_stack, centers):
         y_distances = (y_indices - y_center) * pixel_spacing[1]
         x_distances = (x_indices - x_center) * pixel_spacing[0]
 
-        recovery_coefficient_correction(profile_x, profile_y, profile_z, x_distances, y_distances, z_distances)
+        #recovery_coefficient_correction(profile_x, profile_y, profile_z, x_distances, y_distances, z_distances)
 
         # Plotting
-        axs[0, i].plot(x_distances, profile_x)
+        axs[0, i].plot(x_distances, profile_x, color=colors[iteration_count - 1])
         axs[0, i].set_title(f'X Profile - {sphere_sizes[i]} mm Sphere')
         axs[0, i].set_xlabel('Distance [mm]')
         axs[0, i].set_ylabel('Signal Intensity [Bq/mL]')
-        axs[0, i].set_ylim(0, 32000)  # Limit y-axis
+        axs[0, i].set_ylim(0, 34000)  # Limit y-axis
 
-        axs[1, i].plot(y_distances, profile_y)
+        axs[1, i].plot(y_distances, profile_y, color=colors[iteration_count - 1])
         axs[1, i].set_title(f'Y Profile - {sphere_sizes[i]} mm Sphere')
         axs[1, i].set_xlabel('Distance [mm]')
         axs[1, i].set_ylabel('Signal Intensity [Bq/mL]')
-        axs[1, i].set_ylim(0, 32000)
+        axs[1, i].set_ylim(0, 34000)
 
-        axs[2, i].plot(z_distances, profile_z)
+        axs[2, i].plot(z_distances, profile_z, color=colors[iteration_count - 1])
         axs[2, i].set_title(f'Z Profile - {sphere_sizes[i]} mm Sphere')
         axs[2, i].set_xlabel('Distance [mm]')
         axs[2, i].set_ylabel('Signal Intensity [Bq/mL]')
-        axs[2, i].set_ylim(0, 32000)
+        axs[2, i].set_ylim(0, 34000)
         
     plt.tight_layout()
     # Toggle full screen mode
@@ -1257,15 +1272,15 @@ def plot_line_profiles(image_stack, centers):
         with open(pickle_path, 'wb') as f:
             pickle.dump(fig, f)
 
-    plt.draw()
+    #plt.draw()
 
     # Show the plot to the user
     plt.show(block=False)
 
     save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Line Profiles"
-    png_path = os.path.join(save_path,    'NEMA_IQ_08_cold_background.png')
-    pdf_path = os.path.join(save_path,    'NEMA_IQ_08_cold_background.pdf')
-    pickle_path = os.path.join(save_path, 'NEMA_IQ_08_cold_background.pickle')
+    png_path = os.path.join(save_path,    'Lineprofile_NEMA_IQ_01_04_08_cold_background.png')
+    pdf_path = os.path.join(save_path,    'Lineprofile_NEMA_IQ_01_04_08_cold_background.pdf')
+    pickle_path = os.path.join(save_path, 'Lineprofile_NEMA_IQ_01_04_08_cold_background.pickle')
     answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here:\n{save_path}\nas:\n{png_path}?")
     if answer: 
         # Save the plot as PNG, PDF, and pickle files        
@@ -1274,9 +1289,10 @@ def plot_line_profiles(image_stack, centers):
         with open(pickle_path, 'wb') as f:
             pickle.dump(plt.gcf(), f)
 
-    plt.show()
+    # Return the figure and axes so we can re-use them
+    return fig, axs
 
-def recovery_coefficient_correction(profile_x, profile_y, profile_z, x_distances, y_distances, z_distances, x_artery, y_artery, z_artery):
+def recovery_coefficient_correction(profile_x, profile_y, profile_z, x_artery, y_artery, z_artery):
     """
     Apply the recovery coefficient correction to the line profiles.
     profile_x: Line profile in the x-direction.
@@ -1396,7 +1412,10 @@ def create_2d_spherical_mask(center, radius_pixels, shape):
         raise ValueError("Center should be a 2D or 3D coordinate")
     
     #z_center += current_index  # Add current_index to z_center
-    depth, height, width = shape
+    # Control dimensions of the image stack shape
+    print(shape)
+
+    height, width = shape
     #print(f"Shape of the spherical mask: {shape}")
     #print(f"Center of the sphere: z: {current_index}, y: {y_center}, x: {x_center}")
     #print(f"Radius of the sphere: {radius_pixels}")

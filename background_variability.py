@@ -504,6 +504,7 @@ def plot_snr_values():
     # SNR calculation adapted from Tong et al. 2010 https://doi.org/10.1109/NSSMIC.2009.5401574 but with SUV_N=40 instead of SUV_mean
     global iteration_count
 
+    flag_use_suv_n = False
     
     sphere_sizes = [10, 13, 17, 22, 28, 37]
     # Do not delete or change these values. If you want to update the values, comment the old values out.
@@ -556,12 +557,48 @@ def plot_snr_values():
     '''
     true_activity_concentration = 26166.28 #Calculated the theoretical activity at scan start [Bq/mL] (Daniel, 05. Nov. 2024 11:36 am)
 
-    # Calculate the SNR for each sphere size
-    SUV_N_array = np.array(SUV_N)
-    # Noise to Signal ratio
-    nsr = np.sqrt((SUV_N_array - true_activity_concentration)**2) / true_activity_concentration
+    if flag_use_suv_n:
+        # Calculate the SNR for each sphere size
+        SUV_N_array = np.array(SUV_N)
+        # Noise to Signal ratio
+        nsr = np.sqrt((SUV_N_array - true_activity_concentration)**2) / true_activity_concentration
+    else:
+        sphere_sizes = [10, 13, 17, 22, 28, 37] # Sphere diameters in mm
+        roi_masks = []  # Initialize a list to store the ROI masks
+        mean_values = []
+        nsrs= [] # Noise-to-Signal Ratios
+        image_stack = build_image_stack()
+        shape = image_stack.shape
+        
+        # Centers for second scan in November
+        #centers = [(current_index, 212, 273), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]
+        
+        # Centers for first scan in October
+        centers = [(current_index, 210, 271), (current_index, 218, 229), (current_index, 257, 214), (current_index, 290, 241), (current_index, 282, 283), (current_index, 243, 298)]            
+    
+        for i, center in enumerate(centers):
+            #Following line commented out because isocontour threshold didn't perfectly delineate the sphere
+            #roi_mask_temp = create_isocontour_voi_3d(image_stack, center, radius, threshold)
+            
+            radius_mm = sphere_sizes[i] / 2
+            
+            # Read in the pixel size of the DICOM image
+            pixel_spacing = dicom_images[0][0x0028, 0x0030].value
+            radius_pixels = radius_mm / pixel_spacing[0]
+            roi_mask_temp = create_3d_spherical_mask(center, radius_pixels, shape)
+            mean_activity = get_mean_value(image_stack, roi_mask_temp)
+            # Calculate the SNR for each sphere size
+            nsr = np.sqrt((mean_activity - true_activity_concentration)**2) / true_activity_concentration
+
+            # Save the values in the arrays
+            roi_masks.append(roi_mask_temp)
+            mean_values.append(mean_activity)
+            nsrs.append(nsr)
+
+    print(f"NSR values: {nsrs}")
+    nsrs = np.array(nsrs)
     # Signal to Noise ratio, normalized to the true activity concentration
-    snr = 1 - nsr
+    snr = 1 - nsrs
     print(f"SNR values: {snr}")
     #legend_entries = ['1 iteration', '2 iterations', '3 iterations', '4 iterations', '5 iterations', '6 iterations', '7 iterations', '8 iterations']
     #legend_entries = ['2 iterations, Gauss 3x3', '2 iterations, Gauss 5x5', '2 iterations, Gauss 7x7', '3 iterations, Gauss 3x3', '3 iterations, Gauss 5x5', '3 iterations, Gauss 7x7', '4 iterations, Gauss 3x3', '4 iterations, Gauss 5x5', '4 iterations, Gauss 7x7']
@@ -578,9 +615,11 @@ def plot_snr_values():
 
     # Plot the SNRs for each sphere size
     plt.figure('Signal-to-Noise Ratio vs Sphere Size')
-    for i, snr_row in enumerate(snr):
-        plt.plot(sphere_sizes, snr_row, marker='o', linestyle=line_styles[i], color=colors[i], label=legend_entries[i])
-    
+    if flag_use_suv_n:
+        for i, snr_row in enumerate(snr):
+            plt.plot(sphere_sizes, snr_row, marker='o', linestyle=line_styles[i], color=colors[i], label=legend_entries[i])
+    else:
+        plt.plot(sphere_sizes, snr, marker='o')#, linestyle=line_styles[i], color=colors[i], label=legend_entries[i])
     #plt.figure('Signal-to-Noise Ratio vs Sphere Size')
     #for i, snr_row in enumerate(snr):
     #    plt.plot(sphere_sizes, snr_row, marker='o', zorder=3) #, label=f'{i + 1} iteration{"s" if i > 0 else ""}')
@@ -769,6 +808,7 @@ def calculate_SUV_N():
             mean_values.append(mean_value)
         # Update plot
         load_more_data = plot_SUV_N(sphere_sizes, results, suv_peak_values, mean_values) # , suv_peak_values)
+        #load_more_data = True
         if not load_more_data:
             break
         # More data to plot
@@ -848,7 +888,7 @@ def plot_SUV_N(sphere_sizes, results, suv_peak_values, mean_values):
     plt.ylim(90, 180)
     plt.grid(True)
     # Show the plot to the user
-    plt.show(block=False)
+    plt.show()
 
     save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//deltaSUV_vs_SUV_mode"
     answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here: {save_path}?")
@@ -867,33 +907,34 @@ def plot_SUV_N(sphere_sizes, results, suv_peak_values, mean_values):
     #if answer:
     #    load_folder()
     # Show the plot again to ensure it remains visible
-    plt.show() 
+    plt.show(block=False) 
     #plt.show()
     # Ask user to load more data or not
-    answer = messagebox.askyesno("Load More Data", "Do you want to load more data?")
-    if answer:
-        # Increment the iteration counter for the legend of the plot
-        iteration_count += 1
-        # Add the current iteration count to the legend entries
-        legend_entries.append(f'{iteration_count}i')
+    if False:
+        answer = messagebox.askyesno("Load More Data", "Do you want to load more data?")
+        if answer:
+            # Increment the iteration counter for the legend of the plot
+            iteration_count += 1
+            # Add the current iteration count to the legend entries
+            legend_entries.append(f'{iteration_count}i')
 
-        # Plot the abs_sum values against the x_labels
-        plt.figure('Summed Absolute Error Plot')
-        plt.plot(range(num_values), abs_sums, marker='o')
-        plt.xlabel('Type of Delineation')
-        plt.ylabel(r'Summed Absolute $\Delta$c [%]')
-        plt.title('Delineation Type Dependent Error')
-        plt.xticks(range(num_values), x_labels)  # Set x-ticks to the defined labels
-        plt.ylim(90, 180)
-        plt.grid(True)
+            # Plot the abs_sum values against the x_labels
+            plt.figure('Summed Absolute Error Plot')
+            plt.plot(range(num_values), abs_sums, marker='o')
+            plt.xlabel('Type of Delineation')
+            plt.ylabel(r'Summed Absolute $\Delta$c [%]')
+            plt.title('Delineation Type Dependent Error')
+            plt.xticks(range(num_values), x_labels)  # Set x-ticks to the defined labels
+            plt.ylim(90, 180)
+            plt.grid(True)
 
-        # Add legend with the iteration counter in the title and entries
-        plt.legend(legend_entries, title=f'Number of iterations i: ')
+            # Add legend with the iteration counter in the title and entries
+            plt.legend(legend_entries, title=f'Number of iterations i: ')
 
-        return False
-    else:
+            return False
+        else:
 
-        return True
+            return True
             
 
 def suv_peak_with_spherical_voi():
@@ -1197,7 +1238,7 @@ def build_image_stack():
 
 def create_isocontour_roi(img_array, center, radius, threshold):
     """ Creates a binary mask for the isocontour ROI based on the threshold. """
-    y_center, x_center = center
+    z_center, y_center, x_center = center
     mask = np.zeros_like(img_array, dtype=bool)
     # Rows (y coord.)
     for y in range(max(0, int(y_center - radius)), min(img_array.shape[0], int(y_center + radius) + 1)):
@@ -1250,17 +1291,19 @@ def process_rois_for_predefined_centers(roi_or_voi = 'roi'):
     sphere_sizes = [10, 13, 17, 22, 28, 37] # Sphere diameters in mm
 
     for i, center in enumerate(centers):
-        # Assuming a threshold of 40% of the max value within each sphere's bounding box
-        #local_max = np.max(selected_slice[
-        #    max(0, center[0] - radius):min(selected_slice.shape[0], center[0] + radius),
-        #    max(0, center[1] - radius):min(selected_slice.shape[1], center[1] + radius)
-        #])
+        # Assuming a threshold of x% of the max value within each sphere's bounding box
+        z_center, y_center, x_center = center
+        local_max = np.max(selected_slice[
+            max(0, y_center - radius):min(selected_slice.shape[0], y_center + radius),
+            max(0, x_center - radius):min(selected_slice.shape[1], x_center + radius)
+        ])
         #true_activity_concentration = 28136.08 #Calculated the theoretical activity at scan start (Daniel, 10. Oct. 2024 12:22 pm)
         true_activity_concentration = 26166.28 #Calculated the theoretical activity at scan start (Daniel, 05. Nov. 2024 11:36 am)
         # Calculate the radius in pixels (assuming isotropic pixels)
         
 
-        threshold = 0.4 * true_activity_concentration #local_max
+        threshold = 0.41 * true_activity_concentration#local_max 
+        print(f"Threshold for sphere {i + 1}: {threshold:.2f}")
         if roi_or_voi == 'roi':
             #Following line commented out because isocontour threshold didn't perfectly delineate the sphere
             #roi_mask_temp = create_isocontour_roi(selected_slice, center, radius, threshold)
