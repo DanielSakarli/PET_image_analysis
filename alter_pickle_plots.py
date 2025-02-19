@@ -24,9 +24,9 @@ def alter_pickle_plot(pickle_path, output_pickle_path):
    
     # Extract existing plot data
     line = ax.lines[0]
-    ax.set_ylim(90, 270)
+    ax.set_ylim(1.5, 8.5)
     # Include a legend with a title
-    ax.legend(title="Number of\niterations i:", loc='upper left', labels=["1i", "2i", "3i", "4i", "5i", "6i", "7i", "8i"])
+    #ax.legend(title="Number of\niterations i:", loc='lower right', labels=["1i", "2i", "3i", "4i", "5i", "6i", "7i", "8i"])
 
      
      
@@ -147,6 +147,13 @@ def alter_pickle_plot(pickle_path, output_pickle_path):
     with open(output_pickle_path, 'wb') as f:
         pickle.dump(fig, f)
     
+    
+    # Also save the figure as PDF and PNG
+    base_filename = output_pickle_path.rsplit('.', 1)[0]  # Remove .pickle
+    pdf_path = f"{base_filename}.pdf"
+    png_path = f"{base_filename}.png"
+    plt.savefig(pdf_path)
+    plt.savefig(png_path)
     # Optionally, display the modified plot
     plt.show()
 

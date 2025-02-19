@@ -211,8 +211,8 @@ def previous_slice():
         slice_slider.set(current_index)
 
 # Calculate background variability according to NEMA NU 2-2007
-def background_variability(current_index):
-    global roi_pixels, rois, dicom_images
+def background_variability():
+    global roi_pixels, rois, dicom_images, current_index
 
     sphere_sizes = [10, 13, 17, 22, 28, 37]  # Sphere sizes in mm
     # Extract slice_thickness using the DICOM tag's hexadecimal code
@@ -308,7 +308,7 @@ def background_variability(current_index):
 
 
     
-    ir_values = get_ir_value(roi_masks, slice_numbers)
+    #ir_values = get_ir_value(roi_masks, slice_numbers)
 
     # Calculate the final average for each column over the 5 slices
     final_mean_values = []
@@ -364,7 +364,7 @@ def background_variability(current_index):
             background_variability_array.append(None)
             print(f"Percent background variability for ROI size {roi_sizes[col]} mm: None")
 
-    return background_variability_array
+    return final_mean_values, background_variability_array
 
 
 def get_ir_value(masks, slice_numbers):
@@ -501,16 +501,101 @@ def plot_ir_values(ir_values):
     # Show the plot again to ensure it remains visible
     plt.show() 
     
+def get_snr_values():
+    '''
+    SNR calculation according to standard calculation SNR = mean / std
+
+    Input: None
+    Output:
+    - snr_values: List of SNR values for the different spheres
+    '''
+    global roi_masks, iteration_count
+
+    flag_use_suv_n = False
+
+    sphere_sizes = [10, 13, 17, 22, 28, 37]  # Sphere sizes in mm
+
+    # Initialize VOI masks for the different spheres
+    process_rois_for_predefined_centers()
+
+    # Get the mean and std values of the VOI masks
+    mean_values = []
+    std_values = []
+    snr_values = []
+    image_stack = build_image_stack()
+    for mask in roi_masks:
+        mean_value = get_mean_value(image_stack, mask)
+        mean_values.append(mean_value)
+        std_value = np.std(image_stack[mask])
+        std_values.append(std_value)
+    print(f"Mean values in get_snr_values: {mean_values}")
+    print(f"Standard deviation values in get_snr_values: {std_values}")
+
+    # Turn the lists to arrays
+    mean_values = np.array(mean_values)
+    std_values = np.array(std_values)
+
+    # Calculate the SNR values for the different spheres
+    snr_values = mean_values / std_values
+    print(f"SNR values in get_snr_values: {snr_values}")
+
+    # Plot the SNR values
+    legend_entries = ['1i', '2i', '3i', '4i', '5i', '6i', '7i', '8i']
+    #legend_entries = ['2 iterations, Gauss 3x3', '2 iterations, Gauss 5x5', '2 iterations, Gauss 7x7', '3 iterations, Gauss 3x3', '3 iterations, Gauss 5x5', '3 iterations, Gauss 7x7', '4 iterations, Gauss 3x3', '4 iterations, Gauss 5x5', '4 iterations, Gauss 7x7']
+    #legend_entries = ['Absolute Scattering, 2i', 'Relative Scattering, 2i', 'Absolute Scattering, 3i', 'Relative Scattering, 3i', 'Absolute Scattering, 4i', 'Relative Scattering, 4i']
+    #legend_entries = ['4i, Gauss 3x3', '4i, Gauss 5x5', '4i, Gauss 7x7']
+
+    # Plot the SNRs for each sphere size
+    plt.figure('Signal-to-Noise Ratio vs Sphere Size')
+    
+    #for i, snr in enumerate(snr_values):
+        
+    plt.plot(sphere_sizes, snr_values, marker='o') #, linestyle=line_styles[i], color=colors[i]
+    iteration_count += 1
+    plt.legend(legend_entries[0:iteration_count], title=f'Number of\niterations i:')
+    
+    plt.xlabel('Sphere Size [mm]')
+    plt.ylabel('SNR [1]')
+    plt.title(r'SNR calculated with $c_{mean}$ and 1:4 background activity ratio')
+    plt.legend(legend_entries, title=f'Number of\niterations i:')
+    plt.grid(True)
+    plt.xticks(sphere_sizes)
+    plt.ylim(1.5, 8)
+
+    # Show the plot to the user
+    plt.show(block=False)
+
+    save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//SNR"
+    png_path = os.path.join(save_path, 'NEMA_IQ_01-08_1_to_4_background_ratio_scan_standard_SNR_vs_sphere_size_calculated_with_c_mean.png')
+    pdf_path = os.path.join(save_path, 'NEMA_IQ_01-08_1_to_4_background_ratio_scan_standard_SNR_vs_sphere_size_calculated_with_c_mean.pdf')
+    pickle_path = os.path.join(save_path, 'NEMA_IQ_01-08_1_to_4_background_ratio_scan_standard_SNR_vs_sphere_size_calculated_with_c_mean.pickle')
+    
+    answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here:\n{save_path}\nas:\n{png_path}?")
+    if answer:
+        # Save the plot as PNG, PDF, and pickle files        
+        plt.savefig(png_path)
+        plt.savefig(pdf_path)
+        with open(pickle_path, 'wb') as f:
+            pickle.dump(plt.gcf(), f)
+    # Show the plot again to ensure it remains visible
+    plt.show() 
+
+    return snr_values
+
 def plot_snr_values():
-    # SNR calculation adapted from Tong et al. 2010 https://doi.org/10.1109/NSSMIC.2009.5401574 but with SUV_N=40 instead of SUV_mean
+    '''
+    SNR calculation adapted from Tong et al. 2010 https://doi.org/10.1109/NSSMIC.2009.5401574 but with SUV_N=40 instead of SUV_mean
+    
+    '''
     global iteration_count, roi_masks, current_index
 
     flag_use_suv_n = True
-    flag_scan_to_be_used = 1 #1: first scan with no background (10.10.2024), 2: second scan with background (05.11.2024)
+    flag_scan_to_be_used = 2 #1: first scan with no background (10.10.2024), 2: second scan with background (05.11.2024)
 
     sphere_sizes = [10, 13, 17, 22, 28, 37]
     
     # Do not delete or change these values. If you want to update the values, comment the old values out.
+    '''
     SUV_N = [
     # SUV_N values for N = 4 for NEMA IQ scan with no background activity (10.10.2024) and spherical VOIs
         [24215.00, 28108.00, 29569.00, 30052.00, 32183.75, 32284.00], #NEMA_IQ_01
@@ -534,7 +619,7 @@ def plot_snr_values():
         [21858.50, 30721.00, 32063.75, 31061.50, 32528.50, 32293.50], #NEMA_IQ_07
         [22083.25, 30214.75, 31539.25, 30633.75, 32366.25, 32053.50]  #NEMA_IQ_08
     ]
-    '''
+    
     # SUV_N values for N = 40 for NEMA IQ scan with background activity from the 05.11.2024
     '''
     SUV_N = [
@@ -593,7 +678,7 @@ def plot_snr_values():
         # Calculate the SNR for each sphere size
         SUV_N_array = np.array(SUV_N)
         # Noise to Signal ratio
-        nsr = np.sqrt((SUV_N_array - true_activity_concentration)**2) / true_activity_concentration
+        nsrs = np.sqrt((SUV_N_array - true_activity_concentration)**2) / true_activity_concentration
     else:
         sphere_sizes = [10, 13, 17, 22, 28, 37] # Sphere diameters in mm
         roi_masks = []  # Initialize a list to store the ROI masks
@@ -629,8 +714,8 @@ def plot_snr_values():
             roi_masks.append(roi_mask_temp)
             mean_values.append(mean_activity)
             nsrs.append(nsr)
-
-    display_dicom_image(selected_slice, canvas, ax)
+        display_dicom_image(selected_slice, canvas, ax)
+    
     print(f"NSR values: {nsrs}")
     nsrs = np.array(nsrs)
     # Signal to Noise ratio, normalized to the true activity concentration
@@ -653,7 +738,7 @@ def plot_snr_values():
     plt.figure('Signal-to-Noise Ratio vs Sphere Size')
     if flag_use_suv_n:
         for i, snr_row in enumerate(snr):
-            plt.plot(sphere_sizes, snr_row, marker='o', linestyle=line_styles[i], color=colors[i], label=legend_entries[i])
+            plt.plot(sphere_sizes, snr_row, marker='o', label=legend_entries[i]) #, linestyle=line_styles[i], color=colors[i]
     else:
         plt.plot(sphere_sizes, snr, marker='o')#, linestyle=line_styles[i], color=colors[i], label=legend_entries[i])
     #plt.figure('Signal-to-Noise Ratio vs Sphere Size')
@@ -662,7 +747,7 @@ def plot_snr_values():
         #legend_entries.append(f'{i + 1} iteration{"s" if i > 0 else ""}')
     plt.xlabel('Sphere Size [mm]')
     plt.ylabel('SNR [1]')
-    plt.title('Signal-to-Noise Ratio vs Sphere Size')
+    plt.title(r'SNR calculated with $c_4$ and 1:4 sphere-to-background ratio')
     plt.legend(legend_entries, title=f'Number of\niterations i:')
     plt.grid(True)
     plt.xticks(sphere_sizes)
@@ -674,9 +759,9 @@ def plot_snr_values():
     plt.show(block=False)
 
     save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//SNR"
-    png_path = os.path.join(save_path, 'NEMA_IQ_01-08_1_to_4_background_scan_SNR_vs_sphere_size_calculated_with_c_mean.png')
-    pdf_path = os.path.join(save_path, 'NEMA_IQ_01-08_1_to_4_background_scan_SNR_vs_sphere_size_calculated_with_c_mean.pdf')
-    pickle_path = os.path.join(save_path, 'NEMA_IQ_01-08_1_to_4_background_scan_SNR_vs_sphere_size_calculated_with_c_mean.pickle')
+    png_path = os.path.join(save_path, 'NEMA_IQ_01-08_1_to_4_background_scan_SNR_vs_sphere_size_calculated_with_c_N_and_N=4.png')
+    pdf_path = os.path.join(save_path, 'NEMA_IQ_01-08_1_to_4_background_scan_SNR_vs_sphere_size_calculated_with_c_N_and_N=4.pdf')
+    pickle_path = os.path.join(save_path, 'NEMA_IQ_01-08_1_to_4_background_scan_SNR_vs_sphere_size_calculated_with_c_N_and_N=4.pickle')
     answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here:\n{save_path}\nas:\n{png_path}?")
     if answer: 
         # Save the plot as PNG, PDF, and pickle files        
@@ -697,7 +782,7 @@ def plot_snr_values():
 def select_slice():
     selected_slice = dicom_images[current_index]
     save_selected_slice(selected_slice)
-    background_variability(current_index)
+    background_variability()
     #process_rois_for_predefined_centers()
     #suv_peak_with_spherical_voi()
 
@@ -1309,10 +1394,12 @@ def create_isocontour_voi_3d(img_array, center, radius, threshold):
     return mask
 
 
-def process_rois_for_predefined_centers(roi_or_voi = 'roi'):
+def process_rois_for_predefined_centers(roi_or_voi = 'voi'):
     global roi_masks, current_index, SUV_max_values, dicom_images
 
     flag_scan_to_be_used = 2 # 1 for scan from 10.10.2024 (no background) and 2 for scan from 05.11.2024 (1:4 sphere-to-background activity ratio)
+    flag_calculate_rc = False
+    flag_use_suv_n_for_rc = False # Use c_4 to calculate RC. If False, it uses c_mean for calculation
 
     image_stack = build_image_stack()
     shape = image_stack.shape
@@ -1331,6 +1418,7 @@ def process_rois_for_predefined_centers(roi_or_voi = 'roi'):
              
     radius = 15  # Covers even the biggest sphere with a diameter of 18.5 pixels (times approx. 2 mm pixel_spacing = 37 mm sphere)
     roi_masks = []
+    recovery_coefficients = []
     # roi_pixels = []  # Initialize roi_pixels as an empty list
     sphere_sizes = [10, 13, 17, 22, 28, 37] # Sphere diameters in mm
 
@@ -1343,9 +1431,11 @@ def process_rois_for_predefined_centers(roi_or_voi = 'roi'):
         ])
         if flag_scan_to_be_used == 1:
             true_activity_concentration = 28136.08 #Calculated the theoretical activity at scan start (Daniel, 10. Oct. 2024 12:22 pm)
+            true_activity_concentration_background = 0 # No background activity in the first scan
         elif flag_scan_to_be_used == 2:
             true_activity_concentration = 26166.28 #Calculated the theoretical activity at scan start (Daniel, 05. Nov. 2024 11:36 am)
-        
+            true_activity_concentration_background = 6300.0 #Calculated the theoretical activity in background at scan start (Daniel, 05. Nov. 2024 11:36 am)
+
         # Calculate the radius in pixels (assuming isotropic pixels)
         threshold = 0.41 * true_activity_concentration#local_max 
         print(f"Threshold for sphere {i + 1}: {threshold:.2f}")
@@ -1396,23 +1486,146 @@ def process_rois_for_predefined_centers(roi_or_voi = 'roi'):
         print(f"Mean value for VOI {i + 1}: {mean_value:.2f}")
         print(f"SUV_max value for VOI {i + 1}: {max_value:.2f}")
         print(f"Number of pixels in VOI {i + 1}: {num_pixels}")
- 
-    # Calculate the recovery coefficient of the different ROIs using the stored mean values
-    print(f"True activity: {true_activity_concentration:.2f}")
-    for i, mean_value in enumerate(mean_values):
-        recovery_coefficient = mean_value / true_activity_concentration
-        recovery_coefficients.append(recovery_coefficient)
-        print(f"Recovery coefficient for VOI {i + 1}: {recovery_coefficient:.2f}")
+    
 
+    if flag_calculate_rc:
 
-    # Ensure the length of voi_sizes matches the length of recovery_coefficients
-    #if len(voi_sizes) != len(recovery_coefficients):
-    #    raise ValueError("The length of VOI numbers does not match the length of recovery coefficients.")
+        # Get the mean value of the background activity as described in NEMA NU-2 2007
+        measured_background_mean, background_variability_values = background_variability()
+        print("Mean value(s) of background activity:", 
+        ", ".join(f"{val:.2f}" for val in measured_background_mean))
+
+        if flag_use_suv_n_for_rc:
+            if flag_scan_to_be_used == 1:
+                SUV_N = [
+                # SUV_N values for N = 4 for NEMA IQ scan with no background activity (10.10.2024) and spherical VOIs
+                    [24215.00, 28108.00, 29569.00, 30052.00, 32183.75, 32284.00], #NEMA_IQ_01
+                    [21633.50, 25305.00, 27164.50, 28918.00, 31995.00, 31919.50], #NEMA_IQ_02
+                    [20229.50, 24343.75, 26155.00, 28590.25, 32167.75, 31769.00], #NEMA_IQ_03
+                    [19414.50, 23938.50, 25634.75, 28299.00, 32496.50, 31819.25], #NEMA_IQ_04
+                    [18528.00, 23277.25, 24906.50, 27613.50, 32210.50, 31422.00], #NEMA_IQ_05
+                    [17828.75, 22674.25, 24233.50, 26976.00, 31807.00, 30987.50], #NEMA_IQ_06
+                    [17374.75, 22231.25, 23721.25, 26574.50, 31497.75, 30702.75], #NEMA_IQ_07
+                    [17014.25, 21907.50, 23342.75, 26409.50, 31301.25, 30529.75]  #NEMA_IQ_08
+                ]
+                # Saved background actitivies calculated according to NEMA NU-2 2007 for sphere sizes 10 to 37 mm and scan with no background activity
+                measured_background_mean = [
+                    [9.70, 10.14, 10.61, 11.27, 12.31, 16.92], #NEMA_IQ_01
+                    [8.15, 8.83, 9.41, 9.93, 10.53, 14.08], #NEMA_IQ_02
+                    [7.82, 8.78, 9.46, 9.92, 10.35, 13.62], #NEMA_IQ_03
+                    [7.72, 8.95, 9.70, 10.10, 10.44, 13.52], #NEMA_IQ_04
+                    [7.56, 9.02, 9.82, 10.18, 10.48, 13.33], #NEMA_IQ_05
+                    [7.43, 9.06, 9.92, 10.25, 10.50, 13.17], #NEMA_IQ_06
+                    [7.29, 9.07, 9.97, 10.28, 10.51, 13.04], #NEMA_IQ_07
+                    [7.15, 9.05, 9.98, 10.26, 10.48, 12.93], #NEMA_IQ_08
+                ]
+            elif flag_scan_to_be_used == 2:
+                SUV_N = [
+                # SUV_N values for N = 4 for NEMA IQ scan with 1:4 sphere-to-background ratio (05.11.2024) and spherical VOIs
+                    [12058.25, 19449.25, 26032.50, 28635.75, 30397.75, 32667.25], #NEMA_IQ_01
+                    [14997.75, 25709.50, 31388.75, 31180.00, 32540.00, 32506.50], #NEMA_IQ_02
+                    [17425.25, 28719.00, 32630.00, 31184.50, 32319.00, 32343.50], #NEMA_IQ_03
+                    [18954.75, 29795.00, 32363.00, 30926.00, 32084.25, 31894.75], #NEMA_IQ_04
+                    [20277.50, 30514.50, 32269.25, 31059.75, 32369.25, 31975.75], #NEMA_IQ_05
+                    [21265.50, 30839.75, 32276.25, 31209.50, 32550.75, 32238.50], #NEMA_IQ_06
+                    [21858.50, 30721.00, 32063.75, 31061.50, 32528.50, 32293.50], #NEMA_IQ_07
+                    [22083.25, 30214.75, 31539.25, 30633.75, 32366.25, 32053.50]  #NEMA_IQ_08
+                ]
+                # Saved background actitivies calculated according to NEMA NU-2 2007 for sphere sizes 10 to 37 mm and scan with 1:4 sphere-to-background ratio
+                measured_background_mean = [
+                    [5944.70, 5968.56, 5994.71, 6026.76, 6050.01, 6062.55], #NEMA_IQ_01
+                    [5278.74, 5308.38, 5343.63, 5388.38, 5422.01, 5444.25], #NEMA_IQ_02
+                    [5089.45, 5121.13, 5161.30, 5213.41, 5252.54, 5278.23], #NEMA_IQ_03
+                    [4956.81, 4988.97, 5031.99, 5088.63, 5130.80, 5158.02], #NEMA_IQ_04
+                    [4924.71, 4957.25, 5002.81, 5063.37, 5107.82, 5135.84], #NEMA_IQ_05
+                    [4902.77, 4935.45, 4983.04, 5046.66, 5092.57, 5120.71], #NEMA_IQ_06
+                    [4849.69, 4882.17, 4931.14, 4996.81, 5043.30, 5070.96], #NEMA_IQ_07
+                    [4757.93, 4789.90, 4839.59, 4906.33, 4952.65, 4979.40], #NEMA_IQ_08
+                ]
+        
+        if flag_use_suv_n_for_rc:
+            # c_4 used to calculate RC
+            SUV_N_array = np.array(SUV_N)
+            recovery_coefficients = (SUV_N_array - measured_background_mean) * 100 / (true_activity_concentration - true_activity_concentration_background)
+            print(f"Shape of recovery_coeff: ", recovery_coefficients.shape)
+        else:
+            # c_mean used to calculate RC
+            print(f"True activity: {true_activity_concentration:.2f}")
+            for i, mean_value in enumerate(mean_values):
+                recovery_coefficient = (mean_value - measured_background_mean[i]) * 100 / (true_activity_concentration - true_activity_concentration_background)
+                recovery_coefficients.append(recovery_coefficient)
+                print(f"Recovery coefficient for VOI {i + 1}: {recovery_coefficient:.2f}")
+
+        # Ensure the length of voi_sizes matches the length of recovery_coefficients
+        #if len(voi_sizes) != len(recovery_coefficients):
+        #    raise ValueError("The length of VOI numbers does not match the length of recovery coefficients.")
+        
+        plot_recovery_coefficients(recovery_coefficients)
     
     # Convert roi_masks to a NumPy array
     roi_masks_array = np.array(roi_masks)
     print(f"Roi masks shape: {roi_masks_array.shape}")
     return roi_masks
+
+def plot_recovery_coefficients(recovery_coefficients):
+    global iteration_count
+
+    sphere_sizes = [10, 13, 17, 22, 28, 37]
+
+    #legend_entries = ['Absolute Scattering, 2i', 'Relative Scattering, 2i', 'Absolute Scattering, 3i', 'Relative Scattering, 3i', 'Absolute Scattering, 4i', 'Relative Scattering, 4i']
+    #legend_entries = ['4i, Gauss 3x3', '4i, Gauss 5x5', '4i, Gauss 7x7']
+    legend_entries = ['1i', '2i', '3i', '4i', '5i', '6i', '7i', '8i']
+    
+    # Define line styles
+    #line_styles = ['-', '--', '-.', '-', '--', '-.', '-', '--', '-.']
+    #line_styles = ['-', '--', '-', '--', '-', '--']
+    # Define colors
+    #colors = ['orange', 'orange', 'orange', 'green', 'green', 'green', 'red', 'red', 'red']
+    #colors = ['orange', 'orange', 'green', 'green', 'red', 'red']
+    #colors = ['red', 'red', 'red']
+    # Plot each SUV array against the voi_sizes
+    
+    plt.figure('Recovery Coefficients')
+    # Plot the recovery coefficients
+    #for rc in recovery_coefficients:
+    if recovery_coefficients.shape[0] == 1:
+        # If the recovery_coefficients is a 1D array, plot it directly, i.e. when it was calculated with c_mean instead of c_4
+        plt.plot(sphere_sizes, recovery_coefficients, marker='o', label=legend_entries[iteration_count]) #, linestyle=line_styles[i], color=colors[i]
+    else:
+        # If RCs were calculated with c_4, all iteration numbers are already at once in the recovery_coefficients array
+        for i, rc in enumerate(recovery_coefficients):
+            plt.plot(sphere_sizes, rc, marker='o', label=legend_entries[i])
+
+    iteration_count += 1
+
+    # Add labels and legend
+    plt.legend(title='Number of\niterations i:')
+    plt.xlabel('Sphere Size [mm]')
+    plt.ylabel('Recovery Coefficient [%]')
+    plt.title('Recovery Coefficients Calculated with $c_{4}$')
+    plt.grid(True)
+    plt.xticks(sphere_sizes)  # Set x-ticks to the exact sphere sizes
+    plt.ylim(0, 140)
+    # Show the plot to the user
+    plt.show(block=False)
+
+    save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Recovery Coefficients"
+    png_path = os.path.join(save_path, 'NEMA_IQ_01-08_no_background_scan_calculated_with_c_4_vs_sphere_size.png')
+    pdf_path = os.path.join(save_path, 'NEMA_IQ_01-08_no_background_scan_calculated_with_c_4_vs_sphere_size.pdf')
+    pickle_path = os.path.join(save_path, 'NEMA_IQ_01-08_no_background_scan_calculated_with_c_4_vs_sphere_size.pickle')
+    answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here:\n{save_path}\nas\n{png_path}?")
+    if answer: 
+        # Save the plot as PNG, PDF, and pickle files
+        plt.savefig(png_path)
+        plt.savefig(pdf_path)
+        with open(pickle_path, 'wb') as f:
+            pickle.dump(plt.gcf(), f)
+    # Ask user to load more data or not
+    #answer = messagebox.askyesno("Load More Data", "Do you want to load more data?")
+    #if answer:
+    #    load_folder()
+    # Show the plot again to ensure it remains visible
+    plt.show() 
 
 
 def draw_plot():
@@ -1530,7 +1743,7 @@ def create_gui():
     zoom_out_button.pack(side=tk.LEFT, padx=5, pady=10)
 
     # VOI Processing Button
-    process_voi_button = tk.Button(root, text="Isocontour detection", command=process_rois_for_predefined_centers)
+    process_voi_button = tk.Button(root, text="Process ROIs", command=process_rois_for_predefined_centers)
     process_voi_button.pack(side=tk.LEFT, padx=20, pady=10)
 
     # Draw Plot Button
@@ -1544,6 +1757,10 @@ def create_gui():
     # Plot SNR Button
     plot_snr_button = tk.Button(root, text="Plot SNR", command=plot_snr_values)
     plot_snr_button.pack(side=tk.LEFT, padx=25, pady=10)
+
+    # Get SNR Button
+    get_snr_button = tk.Button(root, text="Get standard SNR", command=get_snr_values)
+    get_snr_button.pack(side=tk.LEFT, padx=25, pady=10)
 
     # Label for displaying the maximum pixel value
     max_pixel_label = tk.Label(root, text="Max Pixel Value: N/A")

@@ -757,8 +757,12 @@ def create_isocontour_voi_3d(img_array, center, radius, threshold):
 
 def process_rois_for_predefined_centers(roi_or_voi = 'roi'):
     global roi_masks, current_index, SUV_max_values
+    
+    flag_scan_to_be_used = 1 # 1 for the scan with no background activity (10.10.24), 2 for the scan with 1:4 background activity (05.11.24)
+
     image_stack = build_image_stack()
     selected_slice = image_stack[current_index]
+
     print(f"Selected slice: {selected_slice}")
     print(f"Maximum of selected slice: {np.max(selected_slice)}")
     print(f"Shape of selected slice: {selected_slice.shape}")
@@ -769,8 +773,9 @@ def process_rois_for_predefined_centers(roi_or_voi = 'roi'):
         centers = [(209, 270), (217, 228), (257, 214), (287, 242), (280, 282), (242, 298)]
         #centers = [(212, 273), (218, 230), (257, 214), (290, 240), (284, 281), (245, 298)]
     else:
-        # Centers of 6 3D spheres with a 512x512 image size, increasing sphere sizes
-        centers = [(current_index, 209, 270), (current_index, 217, 228), (current_index, 257, 214), (current_index, 287, 242), (current_index, 280, 282), (current_index, 242, 298)]
+        if flag_scan_to_be_used == 1:
+            # Centers of 6 3D spheres with a 512x512 image size, increasing sphere sizes
+            centers = [(current_index, 209, 270), (current_index, 217, 228), (current_index, 257, 214), (current_index, 287, 242), (current_index, 280, 282), (current_index, 242, 298)]
         #centers = [(current_index, 212, 273), (current_index, 218, 230), (current_index, 257, 214), (current_index, 290, 240), (current_index, 284, 281), (current_index, 245, 298)]
     radius = 15  # Covers even the biggest sphere with a diameter of 18.5 pixels (times approx. 2 mm pixel_spacing = 37 mm sphere)
     roi_masks = []
