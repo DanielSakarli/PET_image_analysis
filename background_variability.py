@@ -31,6 +31,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
 import numpy as np
+import pandas as pd
 from scipy import ndimage
 from matplotlib.colors import Normalize
 import pickle
@@ -512,6 +513,7 @@ def get_snr_values():
     global roi_masks, iteration_count
 
     flag_use_suv_n = False
+    flag_write_std_values_to_file = False
 
     sphere_sizes = [10, 13, 17, 22, 28, 37]  # Sphere sizes in mm
 
@@ -531,10 +533,18 @@ def get_snr_values():
     print(f"Mean values in get_snr_values: {mean_values}")
     print(f"Standard deviation values in get_snr_values: {std_values}")
 
-    # Turn the lists to arrays
-    mean_values = np.array(mean_values)
-    std_values = np.array(std_values)
+    iteration_count += 1
 
+    if flag_write_std_values_to_file:
+        iteration_array = ["", "_a", "_b"]
+        # Write the std_values to a csv file
+        file_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Standard Deviation//NEMA_IQ_02_05_a_b_1_to_4_background_ratio_scan_std_values.csv"
+        with open(file_path, 'a') as f:  # Use 'a' to append instead of overwriting
+            # Determine which entry of iteration_array to use
+            entry_suffix = iteration_array[(iteration_count - 1) % len(iteration_array)]
+            for i, std in enumerate(std_values):
+                # Attach the entry_suffix to the iteration_count
+                f.write(f"Iteration_{iteration_count}{entry_suffix},Sphere_Size_{sphere_sizes[i]}_mm,{std}\n")
     # Calculate the SNR values for the different spheres
     snr_values = mean_values / std_values
     print(f"SNR values in get_snr_values: {snr_values}")
@@ -551,7 +561,6 @@ def get_snr_values():
     #for i, snr in enumerate(snr_values):
         
     plt.plot(sphere_sizes, snr_values, marker='o') #, linestyle=line_styles[i], color=colors[i]
-    iteration_count += 1
     plt.legend(legend_entries[0:iteration_count], title=f'Number of\niterations i:')
     
     plt.xlabel('Sphere Size [mm]')
@@ -1064,7 +1073,90 @@ def plot_SUV_N(sphere_sizes, results, suv_peak_values, mean_values):
         else:
 
             return True
+
+def plot_std_values():
+    sphere_sizes = [10, 13, 17, 22, 28, 37]  # Sphere diameter in mm
+
+    # Open a file browser dialog for the user to select a csv file
+    file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv"), ("All files", "*.*")])           
+    if file_path:
+        # Load the csv file into a DataFrame
+        df = pd.read_csv(file_path)
+        print(f"Head of df: ", df.head())
+        
+        plt.figure('Standard Deviation Plot')
+        style_map = {
+        '': '-',    # For iteration label "" 
+        '_a': '--', # For iteration label "_a"
+        '_b': '-.'  # For iteration label "_b"
+        }
+        color_map = {
+            '2': 'tab:orange',
+            '3': 'tab:green',
+            '4': 'tab:red',
+            '5': 'tab:purple'
+        }
+
+        for iteration in df['Iteration'].unique():
+            df_iter = df[df['Iteration'] == iteration].copy()
+            # iteration_label might be for example: "Iteration_1_a"
+            # first remove the prefix:
+            iteration_label = iteration.replace('Iteration_', '')
+            # now iteration_label might be "1_a" or "2_b" or just "3"
             
+            # Separate out the suffix if it's exactly one of ['', '_a', '_b']
+            suffix = ''
+            if iteration_label.endswith('_a'):
+                suffix = '_a'      
+            elif iteration_label.endswith('_b'):
+                suffix = '_b'
+            
+            prefix = ''
+            if iteration_label.startswith('2'):
+                prefix = '2'
+            elif iteration_label.startswith('3'):
+                prefix = '3'
+            elif iteration_label.startswith('4'):
+                prefix = '4'
+            elif iteration_label.startswith('5'):
+                prefix = '5'   
+
+            # Get line style from suffix, default to '-'/'tab:blue' if not in style_map or color_map
+            ls = style_map.get(suffix, '-')
+            cl = color_map.get(prefix, 'tab:blue')
+
+            # Extract the numeric sphere size (e.g., 10 from 'Sphere_Size_10_mm')
+            df_iter['Sphere_Size_mm'] = df_iter['Sphere_Size'].str.extract(r'(\d+)').astype(int)
+
+            # Plot using the determined line style
+            plt.plot(df_iter['Sphere_Size_mm'], df_iter['Std'], marker='o', color=cl, linestyle=ls, label=iteration_label)
+
+        # Labeling the axes
+        plt.xlabel('Sphere Size [mm]')
+        plt.ylabel('Standard Deviation [Bq/mL]')
+        plt.grid(True)
+        plt.ylim(1000, 9000)
+        plt.xlim(7, 40)
+        plt.title('Standard Deviation of 1:4 Sphere-to-Background Ratio Scan')
+        plt.xticks(sphere_sizes)
+        # Add a legend
+        plt.legend(title='Number of\niterations i:')
+        plt.tight_layout()
+        plt.show(block=False)
+
+        save_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Standard Deviation"
+        png_path = os.path.join(save_path, 'NEMA_IQ_04-a-b_Std_1_to_4_background_ratio_scan_calculated_with_c_mean_vs_sphere_size.png')
+        pdf_path = os.path.join(save_path, 'NEMA_IQ_04-a-b_Std_1_to_4_background_ratio_scan_calculated_with_c_mean_vs_sphere_size.pdf')
+        pickle_path = os.path.join(save_path, 'NEMA_IQ_04-a-b_Std_1_to_4_background_ratio_scan_calculated_with_c_mean_vs_sphere_size.pickle')
+        answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here:\n{save_path}\nas\n{png_path}?")
+        if answer: 
+            # Save the plot as PNG, PDF, and pickle files
+            plt.savefig(png_path)
+            plt.savefig(pdf_path)
+            with open(pickle_path, 'wb') as f:
+                pickle.dump(plt.gcf(), f)
+
+        plt.show() 
 
 def suv_peak_with_spherical_voi():
     global current_index, dicom_images, roi_masks, loaded_folder_path
@@ -1398,8 +1490,10 @@ def process_rois_for_predefined_centers(roi_or_voi = 'voi'):
     global roi_masks, current_index, SUV_max_values, dicom_images
 
     flag_scan_to_be_used = 2 # 1 for scan from 10.10.2024 (no background) and 2 for scan from 05.11.2024 (1:4 sphere-to-background activity ratio)
-    flag_calculate_rc = False
+    flag_calculate_background_variability = True
+    flag_calculate_rc = False # Flag for background variability needs to be also True to calculate RC
     flag_use_suv_n_for_rc = False # Use c_4 to calculate RC. If False, it uses c_mean for calculation
+    
 
     image_stack = build_image_stack()
     shape = image_stack.shape
@@ -1467,7 +1561,7 @@ def process_rois_for_predefined_centers(roi_or_voi = 'voi'):
         #roi_coords = np.column_stack(np.where(circle_mask))
         #roi_pixels.append(roi_coords)
     display_dicom_image(selected_slice, canvas, ax)
-    #display_dicom_image(selected_slice, canvas, ax, roi_pixels=roi_pixels)
+
     # Initialize an array to store the mean values of the different VOIs
     mean_values = []
     if roi_or_voi == 'voi':
@@ -1487,14 +1581,13 @@ def process_rois_for_predefined_centers(roi_or_voi = 'voi'):
         print(f"SUV_max value for VOI {i + 1}: {max_value:.2f}")
         print(f"Number of pixels in VOI {i + 1}: {num_pixels}")
     
-
-    if flag_calculate_rc:
-
-        # Get the mean value of the background activity as described in NEMA NU-2 2007
+    if flag_calculate_background_variability:
+    # Get the mean value of the background activity as described in NEMA NU-2 2007
         measured_background_mean, background_variability_values = background_variability()
         print("Mean value(s) of background activity:", 
         ", ".join(f"{val:.2f}" for val in measured_background_mean))
 
+    if flag_calculate_rc and flag_calculate_background_variability:
         if flag_use_suv_n_for_rc:
             if flag_scan_to_be_used == 1:
                 SUV_N = [
@@ -1785,6 +1878,10 @@ def create_gui():
     # Add "Calculate SUV_N" button
     suv_n_button = tk.Button(root, text="Calculate SUV_N", command=lambda: calculate_SUV_N())
     suv_n_button.pack(side=tk.TOP, padx=10, pady=10)
+
+    # Plot Standard Deviation Button
+    plot_std_button = tk.Button(root, text="Plot Standard Deviation", command=plot_std_values)
+    plot_std_button.pack(side=tk.TOP, padx=10, pady=10)
 
     # ROI Input panel for 12 ROIs arranged in a 3x4 grid
     roi_panel = tk.Frame(root)

@@ -6,25 +6,70 @@ import numpy as np
 import pandas as pd
 
 def open_pickle_plot(pickle_path):
-    # Load the plot from the pickle file
     with open(pickle_path, 'rb') as f:
-        fig = pickle.load(f)
-    
+        old_fig = pickle.load(f)
+
+    old_ax = old_fig.axes[0]  # Grab the old Axes
+
+    # Extract data from the old lines
+    #line_data = []
+    for i, line in enumerate(old_ax.lines):
+        x_data = line.get_xdata()
+        y_data = line.get_ydata()
+        print(f"Line {i+1}: x = {x_data}, y = {y_data}")
+        #line_data.append((x_data, y_data))
+
     # Display the plot
     plt.show()
 
 def alter_pickle_plot(pickle_path, output_pickle_path):
-    # Load the plot from the pickle file
+    # Load the old figure
     with open(pickle_path, 'rb') as f:
-        fig = pickle.load(f)
-    
+        old_fig = pickle.load(f)
 
-    ax = fig.axes[0]  # Get the axes object
-    #ax.set_title("Image Roughness in Background vs VOI Sizes")
-   
+    old_ax = old_fig.axes[0]  # Grab the old Axes
+
+    # Extract data from the old lines
+    line_data = []
+    for i, line in enumerate(old_ax.lines):
+        x_data = line.get_xdata()
+        y_data = line.get_ydata()
+        print(f"Line {i+1}: x = {x_data}, y = {y_data}")
+        line_data.append((x_data, y_data))
+
+    # Create a new figure/axes
+    new_fig, new_ax = plt.subplots()
+
+    # Re-plot the lines onto the new axes
+    for i, (x_data, y_data) in enumerate(line_data):
+        new_ax.plot(x_data, y_data, marker='o', label=f"{i+1}i")
+
+    # Now you can safely change the title, labels, etc.
+    new_ax.set_title("Recovery Coefficients within a 10 mm Hot Sphere calculated with c$_{mean}$", fontsize=20)
+    new_ax.set_xlabel("Cylindrical VOI Diameter [mm]", fontsize=16)
+    new_ax.set_ylabel("Recovery Coefficient [%]", fontsize=16)
+    new_ax.legend(title="Number of\niterations i:")
+    new_ax.set_ylim(0, 100)
+    new_ax.set_xlim(0, 40)
+    new_ax.grid(True)
+    # Increase fontsize of xticks and yticks
+    new_ax.tick_params(axis='both', which='major', labelsize=14)
+
+    # Save the new figure
+    with open(output_pickle_path, 'wb') as f:
+        pickle.dump(new_fig, f)
+
+    base_filename = output_pickle_path.rsplit('.', 1)[0]
+    pdf_path = f"{base_filename}.pdf"
+    png_path = f"{base_filename}.png"
+    plt.savefig(pdf_path)
+    plt.savefig(png_path)
+    plt.show()
     # Extract existing plot data
-    line = ax.lines[0]
-    ax.set_ylim(1.5, 8.5)
+    #line = ax.lines[0]
+    #ax.set_ylim(1.5, 8.5)
+
+    
     # Include a legend with a title
     #ax.legend(title="Number of\niterations i:", loc='lower right', labels=["1i", "2i", "3i", "4i", "5i", "6i", "7i", "8i"])
 
@@ -144,18 +189,19 @@ def alter_pickle_plot(pickle_path, output_pickle_path):
     # Save the modified plot back to a pickle file
     # Edit title
     #ax.set_title("Recovery Coefficients within a 10 mm Hot Sphere calculated with c$_{mean}$")
-    with open(output_pickle_path, 'wb') as f:
-        pickle.dump(fig, f)
-    
-    
-    # Also save the figure as PDF and PNG
-    base_filename = output_pickle_path.rsplit('.', 1)[0]  # Remove .pickle
-    pdf_path = f"{base_filename}.pdf"
-    png_path = f"{base_filename}.png"
-    plt.savefig(pdf_path)
-    plt.savefig(png_path)
-    # Optionally, display the modified plot
-    plt.show()
+    if False:
+        with open(output_pickle_path, 'wb') as f:
+            pickle.dump(fig, f)
+        
+        
+        # Also save the figure as PDF and PNG
+        base_filename = output_pickle_path.rsplit('.', 1)[0]  # Remove .pickle
+        pdf_path = f"{base_filename}.pdf"
+        png_path = f"{base_filename}.png"
+        plt.savefig(pdf_path)
+        plt.savefig(png_path)
+        # Optionally, display the modified plot
+        plt.show()
 
 if __name__ == "__main__":
     # Hide the root window
