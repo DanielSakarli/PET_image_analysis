@@ -4,6 +4,7 @@ from tkinter import Tk, filedialog, messagebox
 from scipy.interpolate import interp1d
 import numpy as np
 import pandas as pd
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
 def open_pickle_plot(pickle_path):
     with open(pickle_path, 'rb') as f:
@@ -28,7 +29,7 @@ def alter_pickle_plot(pickle_path, output_pickle_path):
         old_fig = pickle.load(f)
 
     old_ax = old_fig.axes[0]  # Grab the old Axes
-
+    
     # Extract data from the old lines
     line_data = []
     for i, line in enumerate(old_ax.lines):
@@ -39,23 +40,43 @@ def alter_pickle_plot(pickle_path, output_pickle_path):
 
     # Create a new figure/axes
     new_fig, new_ax = plt.subplots()
+    labels=['IDIF', 'AIF', 'RC Corrected IDIF']
 
-    # Re-plot the lines onto the new axes
+    # Re-plot the lines onto the main axes
     for i, (x_data, y_data) in enumerate(line_data):
-        new_ax.plot(x_data, y_data, marker='o', label=f"{i+1}i")
+        new_ax.plot(x_data, y_data, marker='o', label=labels[i])
 
-    # Now you can safely change the title, labels, etc.
-    new_ax.set_title("Recovery Coefficients within a 10 mm Hot Sphere calculated with c$_{mean}$", fontsize=20)
-    new_ax.set_xlabel("Cylindrical VOI Diameter [mm]", fontsize=16)
-    new_ax.set_ylabel("Recovery Coefficient [%]", fontsize=16)
-    new_ax.legend(title="Number of\niterations i:")
-    new_ax.set_ylim(0, 100)
-    new_ax.set_xlim(0, 40)
+    # Main plot formatting
+    new_ax.set_title("PSMA007 Recovery Corrected IDIF", fontsize=20)
+    new_ax.set_xlabel("Time [minutes]", fontsize=16)
+    new_ax.set_ylabel(r"SUV [(kg*mL)$^{-1}$]", fontsize=16)
+    new_ax.legend(loc='lower right', bbox_to_anchor=(0.95, 0.08), fontsize=14) #title="Number of\niterations i:", 
+    new_ax.set_ylim(0, 80)
+    new_ax.set_xlim(-5, 65)
     new_ax.grid(True)
-    # Increase fontsize of xticks and yticks
     new_ax.tick_params(axis='both', which='major', labelsize=14)
 
-    # Save the new figure
+    # Create an inset Axes for the zoomed region
+    ax_inset = inset_axes(
+        new_ax,                # parent axes
+        width="65%",           # inset width (as a percentage of parent)
+        height="65%",          # inset height
+        loc='upper right'      # choose a corner of the parent Axes
+    )
+
+    # Re-plot the same data on the inset
+    for i, (x_data, y_data) in enumerate(line_data):
+        ax_inset.plot(x_data, y_data, marker='o')
+
+    # Set the x- and y-range
+    ax_inset.set_xlim(0, 4)
+    ax_inset.set_ylim(0, 75)  # Adjust to suit your data’s scale
+    ax_inset.set_xticks([0, 1, 2, 3, 4])
+    ax_inset.set_yticks([0, 10, 20, 30, 40, 50, 60, 70])
+    ax_inset.grid(True)
+    ax_inset.tick_params(axis='both', which='major', labelsize=14)
+
+    # Save the new figure to a pickle, plus PDF/PNG
     with open(output_pickle_path, 'wb') as f:
         pickle.dump(new_fig, f)
 

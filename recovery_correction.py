@@ -1915,10 +1915,10 @@ def recovery_coefficient_correction_method_5():
 
     # Show the plot to the user
     plt.show(block=False)
-    save_path = r"C:\Users\DANIE\OneDrive\FAU\Master Thesis\Project\Data\RC Correction\PSMA007"
-    png_path = os.path.join(save_path, 'PSMA007_without_background_method_5_c_4hottest_RC.png')
-    pdf_path = os.path.join(save_path, 'PSMA007_without_background_method_5_c_4hottest_RC.pdf')
-    pickle_path = os.path.join(save_path, 'PSMA007_without_background_method_5_c_4hottest_RC.pickle')
+    save_path = r"C:\Users\DANIE\OneDrive\FAU\Master Thesis\Project\Data\RC Correction\PSMA001"
+    png_path = os.path.join(save_path, 'PSMA001_without_background_method_5_c_4hottest_RC.png')
+    pdf_path = os.path.join(save_path, 'PSMA001_without_background_method_5_c_4hottest_RC.pdf')
+    pickle_path = os.path.join(save_path, 'PSMA001_without_background_method_5_c_4hottest_RC.pickle')
     
     answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here:\n{save_path}\nas\n{png_path}?")
     if answer:
