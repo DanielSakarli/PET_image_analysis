@@ -17,7 +17,9 @@ def open_pickle_plot(pickle_path):
     for i, line in enumerate(old_ax.lines):
         x_data = line.get_xdata()
         y_data = line.get_ydata()
-        print(f"Line {i+1}: x = {x_data}, y = {y_data}")
+        
+        y_max = max(y_data)
+        print(f"Line {i+1}: y_max = {y_max}")
         #line_data.append((x_data, y_data))
 
     # Display the plot

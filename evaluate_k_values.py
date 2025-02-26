@@ -8,6 +8,7 @@ from scipy.stats import wilcoxon
 import itertools
 import numpy as np
 from scipy.stats import linregress
+import scipy.stats as stats
 
 def process_csv(file_path):
     # Load the CSV file into a pandas DataFrame
@@ -25,38 +26,86 @@ def process_csv(file_path):
     # Split the Patient_ID into Patient_Number and Reconstruction_Method
     df_2tc_re[['Patient_Number', 'Reconstruction_Method']] = df_2tc_re['Patient_ID'].str.split('_', n=1, expand=True)
     df_2tc_irre[['Patient_Number', 'Reconstruction_Method']] = df_2tc_irre['Patient_ID'].str.split('_', n=1, expand=True)
-    
-    if False:
-        # Divide the df into the different regions lesion, healthy_prostate, and gluteus_maximus
-        df_2tc_re_lesion = df_2tc_re[df_2tc_re["Region"] == "lesion"]
-        df_2tc_re_healthy_prostate = df_2tc_re[df_2tc_re["Region"] == "healthy_prostate"]
-        df_2tc_re_gluteus_maximus = df_2tc_re[df_2tc_re["Region"] == "gluteus_maximus"]
-        df_2tc_irre_lesion = df_2tc_irre[df_2tc_irre["Region"] == "lesion"]
-        df_2tc_irre_healthy_prostate = df_2tc_irre[df_2tc_irre["Region"] == "healthy_prostate"]
-        df_2tc_irre_gluteus_maximus = df_2tc_irre[df_2tc_irre["Region"] == "gluteus_maximus"]
 
-    # Calculate Spearman correlation for each k variable
-    k_variables = ["Flux", "K1", "k2", "k3", "k4"]
-    correlation_results = {}
-    for df, model in zip([df_2tc_re, df_2tc_irre], ["2_Tissue_Compartments", "2_Tissue_Compartments,_FDG"]):
-        for var in k_variables:
-            correlation_matrix = calculate_spearman_correlation(df, var, model)
-            correlation_results[(model, var)] = correlation_matrix
+    # Perform Wilcoxon signed rank test for each k variable
+    k_variables_re = ["Flux", "K1", "k2", "k3", "k4"]
+    k_variables_irre = ["Flux", "K1", "k2", "k3"]
+    p_matrix_re = []
+    p_matrix_irre = []
+    for k_variable in k_variables_re:
+        p_matrix_re.append(wilcoxon_test(df_2tc_re, k_variable))
+        if k_variable in k_variables_irre:
+            p_matrix_irre.append(wilcoxon_test(df_2tc_irre, k_variable))
+
+    print("\nWilcoxon Signed-Rank Test Results for Reversible Model:")
+    for k_variable, p_matrix in zip(k_variables_re, p_matrix_re):
+        print(f"\n{k_variable}:\n{p_matrix}")
+
+    print("\nWilcoxon Signed-Rank Test Results for Irreversible Model:")
+    for k_variable, p_matrix in zip(k_variables_irre, p_matrix_irre):
+        print(f"\n{k_variable}:\n{p_matrix}")
+        
+    if False:
+        correlation_results = {}
+        for df, model in zip([df_2tc_re, df_2tc_irre], ["2_Tissue_Compartments", "2_Tissue_Compartments,_FDG"]):
+            for var in k_variables:
+                correlation_matrix = calculate_spearman_correlation(df, var, model)
+                correlation_results[(model, var)] = correlation_matrix
     print("I'm here")
     # Generate boxplots for all patients and k variables
     # With the reversible model
     #create_boxplot(df_2tc_re, k_variables)
     #create_lineplots(df_2tc_re, k_variables)
-    create_scatterplot(df_2tc_re, k_variables)
-    # With the irreversible model, exclude the k4 variable, so it doesn't appear as a x label in the plot
-    k_variables.remove("k4")
+    create_scatterplot(df_2tc_re, k_variables_re)
     #create_boxplot(df_2tc_irre, k_variables)
     #create_lineplots(df_2tc_irre, k_variables)
-    create_scatterplot(df_2tc_irre, k_variables)
+    create_scatterplot(df_2tc_irre, k_variables_irre)
     
-    return correlation_results
+    #return correlation_results
     
+def wilcoxon_test(df, k_variable):
+    """
+    Perform Wilcoxon signed-rank tests for a given k_variable across all reconstruction methods.
+    
+    Args:
+        df (pd.DataFrame): DataFrame containing columns 'Patient_Number', 'Reconstruction_Method', and k_variable.
+        k_variable (str): The k-variable to analyze (e.g., 'K1', 'k2', etc.).
+    
+    Returns:
+        pd.DataFrame: A matrix of p-values comparing reconstruction methods.
+    """
+    # Make sure that the k_variable values are numeric and not strings
+    df[k_variable] = pd.to_numeric(df[k_variable], errors="coerce")
 
+    # Get unique reconstruction methods
+    recon_methods = df["Reconstruction_Method"].unique()
+    
+    # Initialize an empty DataFrame for storing p-values
+    p_matrix = pd.DataFrame(index=recon_methods, columns=recon_methods)
+    
+    # Perform Wilcoxon signed-rank test for each pair of reconstruction methods
+    for method1, method2 in itertools.combinations(recon_methods, 2):
+        # Extract the k-variable values for both methods, matching by Patient_Number
+        df1 = df[df["Reconstruction_Method"] == method1][["Patient_Number", k_variable]]
+        df2 = df[df["Reconstruction_Method"] == method2][["Patient_Number", k_variable]]
+        
+        # Merge to ensure we compare the same patients
+        merged = pd.merge(df1, df2, on="Patient_Number", suffixes=("_1", "_2"))
+        
+        if not merged.empty:
+            # Perform Wilcoxon signed-rank test
+            stat, p_value = stats.wilcoxon(merged[f"{k_variable}_1"], merged[f"{k_variable}_2"])
+            p_matrix.loc[method1, method2] = p_value
+            p_matrix.loc[method2, method1] = p_value  # Mirror value
+        else:
+            p_matrix.loc[method1, method2] = None
+            p_matrix.loc[method2, method1] = None
+    
+    # Fill diagonal with NaN (comparison with itself is not needed)
+    for method in recon_methods:
+        p_matrix.loc[method, method] = None
+    
+    return p_matrix
     
 def calculate_spearman_correlation(df, k, model):
     """
