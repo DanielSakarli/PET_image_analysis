@@ -11,6 +11,9 @@ from scipy.stats import linregress
 import scipy.stats as stats
 
 def process_csv(file_path):
+    flag_calculate_wilcoxon_test = False
+    flag_do_scatterplot = True
+    
     # Load the CSV file into a pandas DataFrame
     df = pd.read_csv(file_path, delimiter=";")
     
@@ -27,24 +30,29 @@ def process_csv(file_path):
     df_2tc_re[['Patient_Number', 'Reconstruction_Method']] = df_2tc_re['Patient_ID'].str.split('_', n=1, expand=True)
     df_2tc_irre[['Patient_Number', 'Reconstruction_Method']] = df_2tc_irre['Patient_ID'].str.split('_', n=1, expand=True)
 
-    # Perform Wilcoxon signed rank test for each k variable
+    
     k_variables_re = ["Flux", "K1", "k2", "k3", "k4"]
     k_variables_irre = ["Flux", "K1", "k2", "k3"]
-    p_matrix_re = []
-    p_matrix_irre = []
-    for k_variable in k_variables_re:
-        p_matrix_re.append(wilcoxon_test(df_2tc_re, k_variable))
-        if k_variable in k_variables_irre:
-            p_matrix_irre.append(wilcoxon_test(df_2tc_irre, k_variable))
 
-    print("\nWilcoxon Signed-Rank Test Results for Reversible Model:")
-    for k_variable, p_matrix in zip(k_variables_re, p_matrix_re):
-        print(f"\n{k_variable}:\n{p_matrix}")
+    if flag_calculate_wilcoxon_test:
+        # Perform Wilcoxon signed rank test for each k variable
+        p_matrix_re = []
+        p_matrix_irre = []
+        for k_variable in k_variables_re:
+            p_matrix_re.append(wilcoxon_test(df_2tc_re, k_variable))
+            if k_variable in k_variables_irre:
+                p_matrix_irre.append(wilcoxon_test(df_2tc_irre, k_variable))
 
-    print("\nWilcoxon Signed-Rank Test Results for Irreversible Model:")
-    for k_variable, p_matrix in zip(k_variables_irre, p_matrix_irre):
-        print(f"\n{k_variable}:\n{p_matrix}")
         
+
+        print("\nWilcoxon Signed-Rank Test Results for Irreversible Model:")
+        for k_variable, p_matrix in zip(k_variables_irre, p_matrix_irre):
+            print(f"\n{k_variable}:\n{p_matrix}")
+        
+        print("\nWilcoxon Signed-Rank Test Results for Reversible Model:")
+        for k_variable, p_matrix in zip(k_variables_re, p_matrix_re):
+            print(f"\n{k_variable}:\n{p_matrix}")
+
     if False:
         correlation_results = {}
         for df, model in zip([df_2tc_re, df_2tc_irre], ["2_Tissue_Compartments", "2_Tissue_Compartments,_FDG"]):
@@ -56,11 +64,12 @@ def process_csv(file_path):
     # With the reversible model
     #create_boxplot(df_2tc_re, k_variables)
     #create_lineplots(df_2tc_re, k_variables)
-    create_scatterplot(df_2tc_re, k_variables_re)
+    
     #create_boxplot(df_2tc_irre, k_variables)
     #create_lineplots(df_2tc_irre, k_variables)
-    create_scatterplot(df_2tc_irre, k_variables_irre)
-    
+    if flag_do_scatterplot:
+        create_scatterplot(df_2tc_irre, k_variables_irre)
+        create_scatterplot(df_2tc_re, k_variables_re)
     #return correlation_results
     
 def wilcoxon_test(df, k_variable):
@@ -88,14 +97,16 @@ def wilcoxon_test(df, k_variable):
         # Extract the k-variable values for both methods, matching by Patient_Number
         df1 = df[df["Reconstruction_Method"] == method1][["Patient_Number", k_variable]]
         df2 = df[df["Reconstruction_Method"] == method2][["Patient_Number", k_variable]]
-        
+        print("method 1", method1)
+        print("method 2", method2)
         # Merge to ensure we compare the same patients
         merged = pd.merge(df1, df2, on="Patient_Number", suffixes=("_1", "_2"))
-        
+        print("merged dataframe:\n", merged)
         if not merged.empty:
             # Perform Wilcoxon signed-rank test
             stat, p_value = stats.wilcoxon(merged[f"{k_variable}_1"], merged[f"{k_variable}_2"])
             p_matrix.loc[method1, method2] = p_value
+            print("p-value:", p_value)
             p_matrix.loc[method2, method1] = p_value  # Mirror value
         else:
             p_matrix.loc[method1, method2] = None
@@ -173,10 +184,15 @@ def create_scatterplot(df, k_variables):
         plt.tight_layout()
         plt.show()
 
+        
+        # Include only reconstruction_method 04 and 05 for test purposes
+        #df = df[df["Reconstruction_Method"].isin(["04", "02_a"])]
+        
         # Pivot
         pivot_df = df.pivot(index="Patient_Number", 
                             columns="Reconstruction_Method", 
                             values=k_variable)
+        print("Pivot dataframe:\n", pivot_df)
 
         # Ensure column labels are strings (e.g. "04", "05")
         pivot_df.columns = pivot_df.columns.astype(str)
@@ -235,6 +251,7 @@ def create_scatterplot(df, k_variables):
             print(f"Comparing '04' vs '{col}' for {k_variable}")
             print(f"  Slope:        {slope}")
             print(f"  Intercept:    {intercept}")
+            print(f"  Corr. coeff.:      {r_value}")
             print(f"  R-squared:    {r_squared}")
             print(f"  p-value:      {p_value}")
             print(f"  std. error:   {std_err}")
@@ -242,12 +259,28 @@ def create_scatterplot(df, k_variables):
             # Append p-value to our list
             pvals.append(p_value)
             # Scatter plot using Seaborn
-            sns.scatterplot(x=x, y=y, label=f"04 vs {col}. R²={r_squared:.3f}")
+            # Remove the leading 0 in col string and check if col ends on _a or _b, if so remove the _a and _b
+            
+            filter_size = "3mm"
+            col_temp = col.lstrip("0")
+            if col.endswith("_a"):
+                col_temp = col_temp.rstrip("_a")
+                filter_size = "5mm"
+            elif col.endswith("_b"):
+                col_temp = col_temp.rstrip("_b")
+                filter_size = "7mm"
+
+            if intercept<0:
+                legend_entry = col_temp + f"i, {filter_size}: y={slope:.3f}x{intercept:.3f}"
+            else:
+                legend_entry = col_temp + f"i, {filter_size}: y={slope:.3f}x+{intercept:.3f}"
+
+            sns.scatterplot(x=x, y=y, label=legend_entry) #label=f"04 vs {col}. R²={r_squared:.3f}"
 
             # Linear regression line using Seaborn
             x_fit = np.linspace(x.min(), x.max(), 100)
             y_fit = slope * x_fit + intercept
-            sns.lineplot(x=x_fit, y=y_fit, color="red")
+            sns.lineplot(x=x_fit, y=y_fit) #, color="red"
 
             # Scatter plot
             #plt.scatter(x, y, alpha=0.7, label=f"04vs{col}. R²={r_squared:.3f}")
