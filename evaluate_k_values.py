@@ -12,8 +12,9 @@ import scipy.stats as stats
 
 def process_csv(file_path):
     flag_calculate_wilcoxon_test = False
-    flag_do_scatterplot = True
-    
+    flag_do_scatterplot = False
+    flag_do_boxplot = True
+
     # Load the CSV file into a pandas DataFrame
     df = pd.read_csv(file_path, delimiter=";")
     
@@ -21,6 +22,9 @@ def process_csv(file_path):
     required_columns = ["Patient_ID", "Model", "K1", "k2", "k3", "k4", "vB", "Flux"]
     if not all(col in df.columns for col in required_columns):
         raise ValueError(f"CSV file must contain the following columns: {required_columns}")
+    
+    # Discard rows where vB is 0 or 0.05
+    df = df[(df["vB"] != 0) & (df["vB"] != 0.05)]
 
     # Filter the data to include only relevant rows
     df_2tc_re = df[(df["Model"] == "2_Tissue_Compartments") & (df["vB"] != 0.05)].groupby("Patient_ID").first().reset_index()
@@ -65,13 +69,52 @@ def process_csv(file_path):
     #create_boxplot(df_2tc_re, k_variables)
     #create_lineplots(df_2tc_re, k_variables)
     
-    #create_boxplot(df_2tc_irre, k_variables)
-    #create_lineplots(df_2tc_irre, k_variables)
+    if flag_do_boxplot:
+        # Filter the data but keep ALL rows (no groupby/first)
+        df_2tc_re = df[
+            (df["Model"] == "2_Tissue_Compartments") & 
+            (df["vB"] != 0.05)
+        ].reset_index(drop=True)
+
+        df_2tc_irre = df[
+            (df["Model"] == "2_Tissue_Compartments,_FDG") & 
+            (df["vB"] != 0.05)
+        ].reset_index(drop=True)
+        # Split the Patient_ID into Patient_Number and Reconstruction_Method
+        df_2tc_re[['Patient_Number', 'Reconstruction_Method']] = df_2tc_re['Patient_ID'].str.split('_', n=1, expand=True)
+        df_2tc_irre[['Patient_Number', 'Reconstruction_Method']] = df_2tc_irre['Patient_ID'].str.split('_', n=1, expand=True)
+
+        create_boxplot(df_2tc_irre, k_variables_irre)
+        create_boxplot(df_2tc_re, k_variables_re)
+        #wilcoxon_for_PMOD_stability(df_2tc_re, df_2tc_irre, k_variables_irre)
+
     if flag_do_scatterplot:
         create_scatterplot(df_2tc_irre, k_variables_irre)
         create_scatterplot(df_2tc_re, k_variables_re)
     #return correlation_results
+
+def wilcoxon_for_PMOD_stability(df_2tc_re, df_2tc_irre, k_variables):
+    """
+    Compare the given k_variables between df_2tc_re and df_2tc_irre
+    using the Wilcoxon signed-rank test, matching on Patient_ID.
+    """
+    print(df_2tc_irre.head())  
+    print(df_2tc_re.head())
+
+    # For each k-variable, run Wilcoxon signed-rank
+    results = {}
+    for k in k_variables:
+        # Extract the corresponding columns
+        re_vals = pd.to_numeric(df_2tc_re[f"{k}"], errors="coerce").dropna()
+        irre_vals = pd.to_numeric(df_2tc_irre[f"{k}"], errors="coerce").dropna()
+       
+        stat, p_val = stats.wilcoxon(re_vals, irre_vals)
+        results[k] = (stat, p_val)
+        print(f"{k}: Wilcoxon test statistic = {stat}, p-value = {p_val}")
     
+
+    return results
+
 def wilcoxon_test(df, k_variable):
     """
     Perform Wilcoxon signed-rank tests for a given k_variable across all reconstruction methods.
@@ -174,15 +217,15 @@ def create_scatterplot(df, k_variables):
         print(f"Mean {k_variable} by Reconstruction (± 95% CI):")
         print(mean_)
         print(ci95_)
-
-        # Optionally, create a bar plot
-        plt.figure(figsize=(6, 4))
-        plt.bar(mean_.index, mean_.values, yerr=ci95_.values, capsize=5)
-        plt.title(f"Mean {k_variable} by Reconstruction (± 95% CI)")
-        plt.xticks(rotation=45)
-        plt.ylabel(k_variable)
-        plt.tight_layout()
-        plt.show()
+        if False:
+            # Optionally, create a bar plot
+            plt.figure(figsize=(6, 4))
+            plt.bar(mean_.index, mean_.values, yerr=ci95_.values, capsize=5)
+            plt.title(f"Mean {k_variable} by Reconstruction (± 95% CI)")
+            plt.xticks(rotation=45)
+            plt.ylabel(k_variable)
+            plt.tight_layout()
+            plt.show()
 
         
         # Include only reconstruction_method 04 and 05 for test purposes
@@ -355,15 +398,25 @@ def create_scatterplot(df, k_variables):
 
 def create_boxplot(df, k_variables):
     """
-    Create boxplots for the specified k variables (K1, k2, k3, k4) for a single patient.
-    The boxplots for all k variables are drawn in the same figure.
-
-    Args:
-        df (pd.DataFrame): The DataFrame containing the data.
-        k_variables (list): List of variables to create boxplots for (e.g., ["K1", "k2", "k3", "k4"]).
+    Plots all entries for each k variable together in one boxplot figure.
+    For example, if the patient_id is 'PSMA007_04', you get one box for K1,
+    one for k2, etc., side by side.
     """
+    patient_id = "PSMA007_04"
+    # Filter for the chosen patient
+    df_patient = df[df['Patient_ID'] == patient_id].copy()
+
+    # Convert each k-variable column into a "long" format
+    df_melted = df_patient.melt(
+        id_vars=["Patient_ID", "Reconstruction_Method"],
+        value_vars=k_variables,
+        var_name="k_variable",
+        value_name="value"
+    )
+
+    # Drop rows where value is NaN
+    df_melted.dropna(subset=["value"], inplace=True)
     
-    # Get model and region name for the title
     if df["Model"].iloc[0] == "2_Tissue_Compartments":
         model_name = "Two Compartment Reversible Model"
     elif df["Model"].iloc[0] == "2_Tissue_Compartments,_FDG":
@@ -371,70 +424,27 @@ def create_boxplot(df, k_variables):
     else:
         model_name = "Unknown Model"
 
-    if df["Region"].iloc[0] == "lesion":
-        region_name = "Lesion"
-    elif df["Region"].iloc[0] == "healthy_prostate":
-        region_name = "Healthy Prostate"
-    elif df["Region"].iloc[0] == "gluteus_maximus":
-        region_name = "Gluteus Maximus"
+    # Plot all k_variable boxplots in the same figure
+    plt.figure(figsize=(8, 6))
+    sns.boxplot(x="k_variable", y="value", data=df_melted)
+    sns.stripplot(x="k_variable", y="value", data=df_melted, color='black', alpha=0.5)
 
-    # Store all p-values
-    p_values_list = []
+    plt.title(f"{model_name} Stability Test")
+    plt.xlabel("k_variable")
+    plt.ylabel("Value [min$^{-1}$]")
+    plt.tight_layout()
+    plt.show()
 
-    for k_variable in k_variables: 
-        data_for_plotting = []
+    # Compute summary stats for each k_variable group
+    print(f"Data used for statistics: ", df_melted.groupby("k_variable")["value"].describe())
+    group_stats = df_melted.groupby("k_variable")["value"].agg(["mean", "var", "std", "count"])
+    group_stats["sem"] = group_stats["std"] / np.sqrt(group_stats["count"])
+    # 95% CI using ~1.96 multiplier for large samples
+    group_stats["ci_95"] = 1.96 * group_stats["sem"]
 
-        for recon_setting in df["Reconstruction_Method"].unique():
-            # Filter data for the specific reconstruction method
-            recon_data = df[df["Reconstruction_Method"] == recon_setting]
-
-            if recon_data.empty:
-                continue
-
-            # Convert k_variable to numeric and drop NaN values
-            values = pd.to_numeric(recon_data[k_variable], errors="coerce").dropna()
-
-            # Calculate IQR and filter outliers
-            Q1, Q3 = values.quantile(0.25), values.quantile(0.75)
-            IQR = Q3 - Q1
-            lower_bound, upper_bound = Q1 - 1.5 * IQR, Q3 + 1.5 * IQR
-            filtered_values = values[(values >= lower_bound) & (values <= upper_bound)]
-
-            # Append to the dataset
-            data_for_plotting.append(
-                pd.DataFrame({
-                    "Values": filtered_values,
-                    "Recon_Setting": recon_setting,
-                    "Patient Number": recon_data["Patient_Number"]
-                })
-            )
-
-        # Combine data
-        combined_data = pd.concat(data_for_plotting)
-
-        # Perform Wilcoxon test for each pair of reconstruction methods
-        recon_methods = combined_data["Recon_Setting"].unique()
-
-        for recon1, recon2 in itertools.combinations(recon_methods, 2):
-            # Get paired samples per patient
-            paired_data = combined_data.pivot(index="Patient Number", columns="Recon_Setting", values="Values")
-
-            if recon1 in paired_data.columns and recon2 in paired_data.columns:
-                paired_samples = paired_data[[recon1, recon2]].dropna()  # Drop patients missing either value
-
-                if len(paired_samples) > 1:  # Wilcoxon test requires at least two paired samples
-                    stat, p = wilcoxon(paired_samples[recon1], paired_samples[recon2])
-                    p_values_list.append({"k_variable": k_variable, "Recon1": recon1, "Recon2": recon2, "p-value": p})
-
-    # Convert p-values list to a DataFrame
-    p_values_df = pd.DataFrame(p_values_list)
-
-    # Print results in a formatted table
-    if not p_values_df.empty:
-        print("\nWilcoxon Signed-Rank Test Results:")
-        print(p_values_df.to_string(index=False))
-    else:
-        print("\nNo valid paired samples available for Wilcoxon test.")
+    # Print the statistics
+    print(f"\n{model_name}\nVariance and 95% CI by k_variable for patient:", patient_id)
+    print(group_stats[["std","mean", "var", "sem", "ci_95"]])
 
     if False:    
         for k_variable in k_variables:
@@ -679,6 +689,6 @@ def create_lineplots(df, k_variables):
 
 
 if __name__ == "__main__":
-    file_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Kinetic Modelling//All_patients_k_values_AIF_with_inital_parameters_equal_0.csv"
+    file_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Kinetic Modelling//stability_test.csv" #All_patients_k_values_AIF_with_inital_parameters_equal_0.csv
     process_csv(file_path)
     
