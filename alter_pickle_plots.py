@@ -32,55 +32,110 @@ def alter_pickle_plot(pickle_path, output_pickle_path):
 
     old_ax = old_fig.axes[0]  # Grab the old Axes
     
+    # Anzahl der vorhandenen xticks
+    xticks = old_ax.get_xticks()
+    new_xticklabels = [r'$c_{max}$', r'$c_{5}$', r'$c_{10}$', r'$c_{15}$', r'$c_{20}$', r'$c_{25}$', r'$c_{30}$', r'$c_{35}$', r'$c_{40}$', r'$c_{peak}$', r'$c_{mean}$']
+    
+    # Prüfen, ob die Anzahl der neuen Labels mit den vorhandenen xticks übereinstimmt
+    if len(xticks) != len(new_xticklabels):
+        print("Fehler: Anzahl der neuen xticklabels stimmt nicht mit den vorhandenen xticks überein.")
+        return
+
+    # Setze die neuen xticks und Labels
+    old_ax.set_xticklabels(new_xticklabels)
+
     # Extract data from the old lines
     line_data = []
-    for i, line in enumerate(old_ax.lines):
-        x_data = line.get_xdata()
-        y_data = line.get_ydata()
-        print(f"Line {i+1}: x = {x_data}, y = {y_data}")
-        line_data.append((x_data, y_data))
+    # Swap x locations of c_mean and c_peak
+    for line in old_ax.lines:
+        # Get current x and y data as lists
+        x_data = list(line.get_xdata())
+        y_data = list(line.get_ydata())
 
-    # Create a new figure/axes
-    new_fig, new_ax = plt.subplots()
-    labels=['IDIF', 'AIF', 'RC Corrected IDIF']
+        # Ensure we have at least two points to swap (assumed to be c_mean and c_peak)
+        if len(x_data) < 2:
+            continue
 
-    # Re-plot the lines onto the main axes
-    for i, (x_data, y_data) in enumerate(line_data):
-        new_ax.plot(x_data, y_data, marker='o', label=labels[i])
+        # Original assumption:
+        #   c_mean is the second last point and c_peak is the last point.
+        #
+        # To "switch the x location" means that:
+        #   - c_mean should take the x coordinate of c_peak but keep its original y value.
+        #   - c_peak should take the x coordinate of c_mean but keep its original y value.
+        #
+        # Thus, define new pairs:
+        new_c_mean = (x_data[-1], y_data[-2])  # Use x from c_peak, y from c_mean
+        new_c_peak = (x_data[-2], y_data[-1])  # Use x from c_mean, y from c_peak
 
-    # Main plot formatting
-    new_ax.set_title("PSMA007 Recovery Corrected IDIF", fontsize=20)
-    new_ax.set_xlabel("Time [minutes]", fontsize=16)
-    new_ax.set_ylabel(r"SUV [(kg*mL)$^{-1}$]", fontsize=16)
-    new_ax.legend(loc='lower right', bbox_to_anchor=(0.95, 0.08), fontsize=14) #title="Number of\niterations i:", 
-    new_ax.set_ylim(0, 80)
-    new_ax.set_xlim(-5, 65)
-    new_ax.grid(True)
-    new_ax.tick_params(axis='both', which='major', labelsize=14)
+        # Replace the last two points with the new values:
+        x_data[-2] = new_c_mean[0]
+        y_data[-2] = new_c_mean[1]
+        x_data[-1] = new_c_peak[0]
+        y_data[-1] = new_c_peak[1]
 
-    # Create an inset Axes for the zoomed region
-    ax_inset = inset_axes(
-        new_ax,                # parent axes
-        width="65%",           # inset width (as a percentage of parent)
-        height="65%",          # inset height
-        loc='upper right'      # choose a corner of the parent Axes
-    )
+        # Now, although the dots (markers) will appear at the correct x positions,
+        # the line connecting them is drawn in the order stored.
+        # To have the connecting line go from left to right, we reorder the last two points
+        # if the first of the two ends up to the right of the second.
+        if x_data[-2] > x_data[-1]:
+            # Swap the entire points (both x and y) so that the left-most point comes first.
+            x_data[-2], x_data[-1] = x_data[-1], x_data[-2]
+            y_data[-2], y_data[-1] = y_data[-1], y_data[-2]
 
-    # Re-plot the same data on the inset
-    for i, (x_data, y_data) in enumerate(line_data):
-        ax_inset.plot(x_data, y_data, marker='o')
+        # Set the modified data back to the line
+        line.set_xdata(x_data)
+        line.set_ydata(y_data)
 
-    # Set the x- and y-range
-    ax_inset.set_xlim(0, 4)
-    ax_inset.set_ylim(0, 75)  # Adjust to suit your data’s scale
-    ax_inset.set_xticks([0, 1, 2, 3, 4])
-    ax_inset.set_yticks([0, 10, 20, 30, 40, 50, 60, 70])
-    ax_inset.grid(True)
-    ax_inset.tick_params(axis='both', which='major', labelsize=14)
+    old_ax.set_ylabel(r"Summed Absolute Error [%]")
+    
+    if False:
+        for i, line in enumerate(old_ax.lines):
+            x_data = line.get_xdata()
+            y_data = line.get_ydata()
+            print(f"Line {i+1}: x = {x_data}, y = {y_data}")
+            line_data.append((x_data, y_data))
+
+        # Create a new figure/axes
+        new_fig, new_ax = plt.subplots()
+        labels=['IDIF', 'AIF', 'RC Corrected IDIF']
+
+        # Re-plot the lines onto the main axes
+        for i, (x_data, y_data) in enumerate(line_data):
+            new_ax.plot(x_data, y_data, marker='o', label=labels[i])
+
+        # Main plot formatting
+        new_ax.set_title("PSMA007 Recovery Corrected IDIF", fontsize=20)
+        new_ax.set_xlabel("Time [minutes]", fontsize=16)
+        new_ax.set_ylabel(r"SUV [(kg*mL)$^{-1}$]", fontsize=16)
+        new_ax.legend(loc='lower right', bbox_to_anchor=(0.95, 0.08), fontsize=14) #title="Number of\niterations i:", 
+        new_ax.set_ylim(0, 80)
+        new_ax.set_xlim(-5, 65)
+        new_ax.grid(True)
+        new_ax.tick_params(axis='both', which='major', labelsize=14)
+
+        # Create an inset Axes for the zoomed region
+        ax_inset = inset_axes(
+            new_ax,                # parent axes
+            width="65%",           # inset width (as a percentage of parent)
+            height="65%",          # inset height
+            loc='upper right'      # choose a corner of the parent Axes
+        )
+
+        # Re-plot the same data on the inset
+        for i, (x_data, y_data) in enumerate(line_data):
+            ax_inset.plot(x_data, y_data, marker='o')
+
+        # Set the x- and y-range
+        ax_inset.set_xlim(0, 4)
+        ax_inset.set_ylim(0, 75)  # Adjust to suit your data’s scale
+        ax_inset.set_xticks([0, 1, 2, 3, 4])
+        ax_inset.set_yticks([0, 10, 20, 30, 40, 50, 60, 70])
+        ax_inset.grid(True)
+        ax_inset.tick_params(axis='both', which='major', labelsize=14)
 
     # Save the new figure to a pickle, plus PDF/PNG
     with open(output_pickle_path, 'wb') as f:
-        pickle.dump(new_fig, f)
+        pickle.dump(old_fig, f)
 
     base_filename = output_pickle_path.rsplit('.', 1)[0]
     pdf_path = f"{base_filename}.pdf"

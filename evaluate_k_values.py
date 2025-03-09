@@ -11,9 +11,9 @@ from scipy.stats import linregress
 import scipy.stats as stats
 
 def process_csv(file_path):
-    flag_calculate_wilcoxon_test = False
+    flag_calculate_wilcoxon_test = True
     flag_do_scatterplot = False
-    flag_do_boxplot = True
+    flag_do_boxplot = False
 
     # Load the CSV file into a pandas DataFrame
     df = pd.read_csv(file_path, delimiter=";")
@@ -148,6 +148,7 @@ def wilcoxon_test(df, k_variable):
         if not merged.empty:
             # Perform Wilcoxon signed-rank test
             stat, p_value = stats.wilcoxon(merged[f"{k_variable}_1"], merged[f"{k_variable}_2"])
+            p_value = round(p_value, 3)  # Round to three decimal places
             p_matrix.loc[method1, method2] = p_value
             print("p-value:", p_value)
             p_matrix.loc[method2, method1] = p_value  # Mirror value
@@ -336,17 +337,17 @@ def create_scatterplot(df, k_variables):
 
             # Determine axis limits automatically (or set your own)
             if k_variable == "Flux":
-                min_val = 0.01
+                min_val = 0.005
                 max_val = 0.06
             elif k_variable == "K1":
-                min_val = 0.04
+                min_val = 0.003
                 max_val = 0.16
             elif k_variable == "k2":
-                min_val = 0.01
+                min_val = 0.02
                 max_val = 0.16
             elif k_variable == "k3":
                 min_val = 0.01
-                max_val = 0.16
+                max_val = 0.05
             elif k_variable == "k4":
                 min_val = 0
                 max_val = 0.05
@@ -354,6 +355,11 @@ def create_scatterplot(df, k_variables):
             # Plot 45° reference line
             plt.plot([min_val, max_val], [min_val, max_val],
                     linestyle="--", color="gray")
+            # Model name for title
+            if model_name == "Two Compartment Reversible Model":
+                model = "Reversible 2TCM-4k"
+            elif model_name == "Two Compartment Irreversible Model":
+                model = "Irreversible 2TCM-3k"
 
             # Set axes
             plt.xlim(min_val, max_val)
@@ -365,10 +371,10 @@ def create_scatterplot(df, k_variables):
                 plt.xlabel(f"{k_variable} [min$^{{-1}}$] (Reconstruction 04)", fontsize=12)
                 plt.ylabel(f"{k_variable} [min$^{{-1}}$] (All other reconstructions)", fontsize=12)
             if k_variable == "Flux":
-                plt.title(f"{model_name} – {region_name} – $K_i$", fontsize=14)
+                plt.title(f"{model} – {region_name} – $K_i$", fontsize=14)
             else:
-                plt.title(f"{model_name} – {region_name} – {k_variable}", fontsize=14)
-            plt.legend()
+                plt.title(f"{model} – {region_name} – {k_variable}", fontsize=14)
+            plt.legend(fontsize=8)
             sns.despine()
             #plt.grid(True)
             #plt.tight_layout()
@@ -444,7 +450,7 @@ def create_boxplot(df, k_variables):
 
     # Print the statistics
     print(f"\n{model_name}\nVariance and 95% CI by k_variable for patient:", patient_id)
-    print(group_stats[["std","mean", "var", "sem", "ci_95"]])
+    print(group_stats[["std", "mean", "var", "sem", "ci_95"]])
 
     if False:    
         for k_variable in k_variables:
@@ -689,6 +695,6 @@ def create_lineplots(df, k_variables):
 
 
 if __name__ == "__main__":
-    file_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Kinetic Modelling//stability_test.csv" #All_patients_k_values_AIF_with_inital_parameters_equal_0.csv
+    file_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//Kinetic Modelling//All_patients_k_values_AIF_with_inital_parameters_equal_0.csv" #stability_test.csv
     process_csv(file_path)
     
