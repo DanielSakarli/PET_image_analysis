@@ -44,18 +44,18 @@ def get_data_csv(csv_file):
        'HypoxiaVolume [ccm]', 'Time [minutes]']
 
     # Filter rows where data is 'prostate_lesion'
-    prostate_lesion_data = df[df['VoiName(Region) [string]'] == 'prostate_lesion']
+    #prostate_lesion_data = df[df['VoiName(Region) [string]'] == 'prostate_lesion']
     #print(prostate_lesion_data)
 
     # Filter rows where data is 'prostate_healthy'
-    prostate_healthy_data = df[df['VoiName(Region) [string]'] == 'prostate_healthy']
+    #prostate_healthy_data = df[df['VoiName(Region) [string]'] == 'prostate_healthy']
     #print(prostate_healthy_data)
 
     # Filter rows where data is 'gluteus_maximus'
-    gluteus_maximus_data = df[df['VoiName(Region) [string]'] == 'gluteus_maximus']
+    #gluteus_maximus_data = df[df['VoiName(Region) [string]'] == 'gluteus_maximus']
     #print(gluteus_maximus_data)
 
-    IDIF_data = df[df['VoiName(Region) [string]'] == 'Four hottest pixels per slice']
+    IDIF_data = df[df['VoiName(Region) [string]'] == 'Four hottest pixels in all slices']
     print("data:\n",IDIF_data)
     # Plot and save the plots
     # Prostate lesion plots
