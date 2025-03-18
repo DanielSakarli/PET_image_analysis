@@ -11,8 +11,8 @@ from scipy.stats import linregress
 import scipy.stats as stats
 
 def process_csv(file_path):
-    flag_calculate_wilcoxon_test = True
-    flag_do_scatterplot = False
+    flag_calculate_wilcoxon_test = False
+    flag_do_scatterplot = True
     flag_do_boxplot = False
 
     # Load the CSV file into a pandas DataFrame
@@ -128,6 +128,8 @@ def wilcoxon_test(df, k_variable):
     """
     # Make sure that the k_variable values are numeric and not strings
     df[k_variable] = pd.to_numeric(df[k_variable], errors="coerce")
+    # Exclude all values above 2 (outlier detetction)
+    df = df[df[k_variable] <= 2]
 
     # Get unique reconstruction methods
     recon_methods = df["Reconstruction_Method"].unique()
@@ -214,10 +216,56 @@ def create_scatterplot(df, k_variables):
         sem_ = std_ / np.sqrt(count_)
         ci95_ = 1.96 * sem_
 
+        ##############################################################
+        ##### Analyze if the residuals and the k values themselves are
+        # normally distributed. Necessary to do linear regression.
+        ##############################################################
+        # If the data comes as a DataFrame
+        
+        
+        all_values = []
+        differences = []
+
+        ref_values = grouped.get_group('04').values  # Reference values from '04'
+
+        for name, group in grouped:
+            
+            filtered_values = [value for value in group.values if value <= 2]
+            all_values.extend(filtered_values)
+
+            # Calculate differences
+            for i in range(min(len(ref_values), len(filtered_values))):
+                differences.append(ref_values[i] - filtered_values[i])
+
+        all_values = np.array(all_values)
+        differences = np.array(differences)
+
+        # Plotting combined histogram with KDE
+        plt.figure(figsize=(10, 6))
+        sns.histplot(all_values, kde=True, bins=100, color='lightcoral')
+        plt.title('Combined Histogram of k values across all Reconstruction Methods')
+        plt.xlabel('k values')
+        plt.ylabel('Frequency')
+        plt.show()
+
+        # Plotting histogram of differences
+        plt.figure(figsize=(10, 6))
+        sns.histplot(differences, kde=True, bins=100, color='steelblue')
+        plt.title('Histogram of Differences (Reference: 04)')
+        plt.xlabel('Difference (04 - Other Methods)')
+        plt.ylabel('Frequency')
+        plt.show()
+        # Print out the reconstruction methods and patient_id of the values in filtered_values which are above 0.03
+        print("Reconstruction methods of values above 0.03:")
+        print(df[df[k_variable] > 0.03]["Reconstruction_Method"].unique())
+        print("Patient IDs of values above 0.03:")
+        print(df[df[k_variable] > 0.03]["Patient_ID"].unique())
+
         # Print the mean and 95% CI for each recon
+        print("All k-variable values: \n", grouped.apply(list))
         print(f"Mean {k_variable} by Reconstruction (± 95% CI):")
-        print(mean_)
-        print(ci95_)
+        print("Mean values: \n", mean_)
+        print("CI95 values: \n", ci95_)
         if False:
             # Optionally, create a bar plot
             plt.figure(figsize=(6, 4))
@@ -233,6 +281,8 @@ def create_scatterplot(df, k_variables):
         #df = df[df["Reconstruction_Method"].isin(["04", "02_a"])]
         
         # Pivot
+        # Filter out k values > 2
+        df = df[df[k_variable] <= 2]
         pivot_df = df.pivot(index="Patient_Number", 
                             columns="Reconstruction_Method", 
                             values=k_variable)
@@ -254,8 +304,8 @@ def create_scatterplot(df, k_variables):
 
         print("k_variable:", k_variable)
         # Discard the outlier in column '04_b' for row 'PSMA002'
-        if k_variable == "Flux" and "04_b" in pivot_df.columns and "PSMA002" in pivot_df.index:
-            pivot_df.loc["PSMA002", "04_b"] = np.nan
+        #if k_variable == "Flux" and "04_b" in pivot_df.columns and "PSMA002" in pivot_df.index:
+        #    pivot_df.loc["PSMA002", "04_b"] = np.nan
 
         # If nothing left after dropping, skip
         if pivot_df.empty:
