@@ -1493,7 +1493,7 @@ def process_rois_for_predefined_centers(roi_or_voi = 'voi'):
     flag_calculate_background_variability = True
     flag_calculate_rc = False # Flag for background variability needs to be also True to calculate RC
     flag_use_suv_n_for_rc = False # Use c_4 to calculate RC. If False, it uses c_mean for calculation
-    
+    flag_use_thresholding = False
 
     image_stack = build_image_stack()
     shape = image_stack.shape
@@ -1534,24 +1534,23 @@ def process_rois_for_predefined_centers(roi_or_voi = 'voi'):
         threshold = 0.41 * true_activity_concentration#local_max 
         print(f"Threshold for sphere {i + 1}: {threshold:.2f}")
         if roi_or_voi == 'roi':
-            #Following line commented out because isocontour threshold didn't perfectly delineate the sphere
-            #roi_mask_temp = create_isocontour_roi(selected_slice, center, radius, threshold)
-            radius_mm = sphere_sizes[i] / 2
-            
-            # Read in the pixel size of the DICOM image
-            pixel_spacing = dicom_images[0][0x0028, 0x0030].value
-            radius_pixels = radius_mm / pixel_spacing[0]
-            roi_mask_temp = create_2d_spherical_mask(center, radius_pixels, shape)
+            if flag_use_thresholding:
+                roi_mask_temp = create_isocontour_roi(selected_slice, center, radius, threshold)
+            else:
+                radius_mm = sphere_sizes[i] / 2
+                # Read in the pixel size of the DICOM image
+                pixel_spacing = dicom_images[0][0x0028, 0x0030].value
+                radius_pixels = radius_mm / pixel_spacing[0]
+                roi_mask_temp = create_2d_spherical_mask(center, radius_pixels, shape)
         else:
-            #Following line commented out because isocontour threshold didn't perfectly delineate the sphere
-            #roi_mask_temp = create_isocontour_voi_3d(image_stack, center, radius, threshold)
-            
-            radius_mm = sphere_sizes[i] / 2
-            
-            # Read in the pixel size of the DICOM image
-            pixel_spacing = dicom_images[0][0x0028, 0x0030].value
-            radius_pixels = radius_mm / pixel_spacing[0]
-            roi_mask_temp = create_3d_spherical_mask(center, radius_pixels, shape)
+            if flag_use_thresholding:
+                roi_mask_temp = create_isocontour_voi_3d(image_stack, center, radius, threshold)
+            else:
+                radius_mm = sphere_sizes[i] / 2
+                # Read in the pixel size of the DICOM image
+                pixel_spacing = dicom_images[0][0x0028, 0x0030].value
+                radius_pixels = radius_mm / pixel_spacing[0]
+                roi_mask_temp = create_3d_spherical_mask(center, radius_pixels, shape)
         print(f"VOI {len(roi_masks) + 1} - Threshold: {threshold:.2f}, Max Value: {true_activity_concentration:.2f}, Number of Pixels: {np.sum(roi_mask_temp)}")
         roi_masks.append(roi_mask_temp)
     print(f"roi_masks: {roi_masks}")

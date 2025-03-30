@@ -31,62 +31,111 @@ def alter_pickle_plot(pickle_path, output_pickle_path):
         old_fig = pickle.load(f)
 
     old_ax = old_fig.axes[0]  # Grab the old Axes
-    
-    # Anzahl der vorhandenen xticks
-    xticks = old_ax.get_xticks()
-    new_xticklabels = [r'$c_{max}$', r'$c_{5}$', r'$c_{10}$', r'$c_{15}$', r'$c_{20}$', r'$c_{25}$', r'$c_{30}$', r'$c_{35}$', r'$c_{40}$', r'$c_{peak}$', r'$c_{mean}$']
-    
-    # Prüfen, ob die Anzahl der neuen Labels mit den vorhandenen xticks übereinstimmt
-    if len(xticks) != len(new_xticklabels):
-        print("Fehler: Anzahl der neuen xticklabels stimmt nicht mit den vorhandenen xticks überein.")
-        return
+    if False:
+        legend_entries = ["(1i, 3mm)", "(2i, 3mm)", "(3i, 3mm)", "(4i, 3mm)", "(5i, 3mm)", "(6i, 3mm)", "(7i, 3mm)", "(8i, 3mm)"]
+        #legend_entries = ["(4i, 3mm)", "(4i, 5mm)", "(4i, 7mm)"]
+        
+        # Extract data from all lines on the old Axes
+        lines_data = []
+        for line in old_ax.lines:
+            x_data = line.get_xdata()
+            y_data = line.get_ydata()
+            lines_data.append((x_data, y_data))
 
-    # Setze die neuen xticks und Labels
-    old_ax.set_xticklabels(new_xticklabels)
+        # Create a new figure and Axes
+        new_fig, old_ax = plt.subplots()
+        old_ax.set_xlabel("Spherical VOI Diameter [mm]", fontsize=12)
+        old_ax.set_ylabel("Standard Deviation [Bq/mL]", fontsize=12)
+        
+        
+        old_ax.set_ylim(0, 1000)
+        old_ax.set_xlim(0, 40)
+        old_ax.grid(True)
 
-    # Extract data from the old lines
-    line_data = []
-    # Swap x locations of c_mean and c_peak
-    for line in old_ax.lines:
-        # Get current x and y data as lists
-        x_data = list(line.get_xdata())
-        y_data = list(line.get_ydata())
+        # Re-plot the data on the new Axes
+        for i, (x_data, y_data) in enumerate(lines_data):
+            old_ax.plot(x_data, y_data, marker='o', label=legend_entries[i])
+        old_ax.legend(title="Recon-ID:", fontsize=10)
+    old_ax.set_title(r"Quantification Type Dependent Error", fontsize=14)
+    old_ax.set_xlabel("Type of Quantification", fontsize=12)
+    old_ax.set_ylabel(r"Summed Absolute Error [%]", fontsize=12)
+    legend_entries = ["(1i, 3mm)", "(2i, 3mm)", "(3i, 3mm)", "(4i, 3mm)", "(5i, 3mm)", "(6i, 3mm)", "(7i, 3mm)", "(8i, 3mm)"]
+    old_ax.legend(legend_entries, title="Recon-ID:", fontsize=10)
+    if False:  
+        # Anzahl der vorhandenen xticks
+        xticks = old_ax.get_xticks()
+        new_xticklabels = [r'$c_{max}$', r'$c_{5}$', r'$c_{10}$', r'$c_{15}$', r'$c_{20}$', r'$c_{25}$', r'$c_{30}$', r'$c_{35}$', r'$c_{40}$', r'$c_{peak}$', r'$c_{mean}$']
+        
+        # Prüfen, ob die Anzahl der neuen Labels mit den vorhandenen xticks übereinstimmt
+        if len(xticks) != len(new_xticklabels):
+            print("Fehler: Anzahl der neuen xticklabels stimmt nicht mit den vorhandenen xticks überein.")
+            return
 
-        # Ensure we have at least two points to swap (assumed to be c_mean and c_peak)
-        if len(x_data) < 2:
-            continue
+        # Setze die neuen xticks und Labels
+        old_ax.set_xticklabels(new_xticklabels)
 
-        # Original assumption:
-        #   c_mean is the second last point and c_peak is the last point.
-        #
-        # To "switch the x location" means that:
-        #   - c_mean should take the x coordinate of c_peak but keep its original y value.
-        #   - c_peak should take the x coordinate of c_mean but keep its original y value.
-        #
-        # Thus, define new pairs:
-        new_c_mean = (x_data[-1], y_data[-2])  # Use x from c_peak, y from c_mean
-        new_c_peak = (x_data[-2], y_data[-1])  # Use x from c_mean, y from c_peak
+        # Extract data from the old lines
+        line_data = []
+        # Swap x locations of c_mean and c_peak
+        for line in old_ax.lines:
+            # Get current x and y data as lists
+            x_data = list(line.get_xdata())
+            y_data = list(line.get_ydata())
 
-        # Replace the last two points with the new values:
-        x_data[-2] = new_c_mean[0]
-        y_data[-2] = new_c_mean[1]
-        x_data[-1] = new_c_peak[0]
-        y_data[-1] = new_c_peak[1]
+            # Ensure we have at least two points to swap (assumed to be c_mean and c_peak)
+            if len(x_data) < 2:
+                continue
 
-        # Now, although the dots (markers) will appear at the correct x positions,
-        # the line connecting them is drawn in the order stored.
-        # To have the connecting line go from left to right, we reorder the last two points
-        # if the first of the two ends up to the right of the second.
-        if x_data[-2] > x_data[-1]:
-            # Swap the entire points (both x and y) so that the left-most point comes first.
-            x_data[-2], x_data[-1] = x_data[-1], x_data[-2]
-            y_data[-2], y_data[-1] = y_data[-1], y_data[-2]
+            # Original assumption:
+            #   c_mean is the second last point and c_peak is the last point.
+            #
+            # To "switch the x location" means that:
+            #   - c_mean should take the x coordinate of c_peak but keep its original y value.
+            #   - c_peak should take the x coordinate of c_mean but keep its original y value.
+            #
+            # Thus, define new pairs:
+            new_c_mean = (x_data[-1], y_data[-2])  # Use x from c_peak, y from c_mean
+            new_c_peak = (x_data[-2], y_data[-1])  # Use x from c_mean, y from c_peak
 
-        # Set the modified data back to the line
-        line.set_xdata(x_data)
-        line.set_ydata(y_data)
+            # Replace the last two points with the new values:
+            x_data[-2] = new_c_mean[0]
+            y_data[-2] = new_c_mean[1]
+            x_data[-1] = new_c_peak[0]
+            y_data[-1] = new_c_peak[1]
 
-    old_ax.set_ylabel(r"Summed Absolute Error [%]")
+            # Now, although the dots (markers) will appear at the correct x positions,
+            # the line connecting them is drawn in the order stored.
+            # To have the connecting line go from left to right, we reorder the last two points
+            # if the first of the two ends up to the right of the second.
+            if x_data[-2] > x_data[-1]:
+                # Swap the entire points (both x and y) so that the left-most point comes first.
+                x_data[-2], x_data[-1] = x_data[-1], x_data[-2]
+                y_data[-2], y_data[-1] = y_data[-1], y_data[-2]
+
+            # Set the modified data back to the line
+            line.set_xdata(x_data)
+            line.set_ydata(y_data)
+    # Get all axes in the figure
+    #axes = fig.get_axes()
+    if False:
+        # Determine number of rows and columns
+        num_rows = 3  # X, Y, Z profiles
+        num_cols = 6  # Sphere sizes (10 mm to 37 mm)
+
+        for i, ax in enumerate(old_ax):
+            row = i // num_cols
+            col = i % num_cols
+            
+            # Remove x-labels for all rows except the last row
+            if row < num_rows - 1:  
+                ax.set_xlabel('')
+            if row == 2:
+                ax.set_xlabel('Distance [mm]', fontsize=12)
+            # Remove y-labels for all columns except the first column
+            if col > 0:  
+                ax.set_ylabel('')
+            if col == 0:
+                ax.set_ylabel('Signal Intensity [Bq/mL]', fontsize=12)
     
     if False:
         for i, line in enumerate(old_ax.lines):

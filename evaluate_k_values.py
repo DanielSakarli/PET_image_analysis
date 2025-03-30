@@ -11,8 +11,8 @@ from scipy.stats import linregress
 import scipy.stats as stats
 
 def process_csv(file_path):
-    flag_calculate_wilcoxon_test = False
-    flag_do_scatterplot = True
+    flag_calculate_wilcoxon_test = True
+    flag_do_scatterplot = False
     flag_do_boxplot = False
 
     # Load the CSV file into a pandas DataFrame
@@ -42,6 +42,8 @@ def process_csv(file_path):
         # Perform Wilcoxon signed rank test for each k variable
         p_matrix_re = []
         p_matrix_irre = []
+        print(f"Reversible Values sent for Wilcoxon test: {df_2tc_re}")
+        print(f"Irreversible Values sent for Wilcoxon test: {df_2tc_irre}")
         for k_variable in k_variables_re:
             p_matrix_re.append(wilcoxon_test(df_2tc_re, k_variable))
             if k_variable in k_variables_irre:
@@ -415,15 +417,15 @@ def create_scatterplot(df, k_variables):
             plt.xlim(min_val, max_val)
             plt.ylim(min_val, max_val)
             if k_variable == "Flux":
-                plt.xlabel(f"$K_i$ [min$^{{-1}}$] (Reconstruction 04)", fontsize=12)
+                plt.xlabel(f"$K_i$ [min$^{{-1}}$] (4i, 3mm)", fontsize=12)
                 plt.ylabel(f"$K_i$ [min$^{{-1}}$] (All other reconstructions)", fontsize=12)
             else:
-                plt.xlabel(f"{k_variable} [min$^{{-1}}$] (Reconstruction 04)", fontsize=12)
+                plt.xlabel(f"{k_variable} [min$^{{-1}}$] (4i, 3mm)", fontsize=12)
                 plt.ylabel(f"{k_variable} [min$^{{-1}}$] (All other reconstructions)", fontsize=12)
             if k_variable == "Flux":
-                plt.title(f"{model} – {region_name} – $K_i$", fontsize=14)
+                plt.title(f"{model} – $K_i$", fontsize=14) #{region_name} – 
             else:
-                plt.title(f"{model} – {region_name} – {k_variable}", fontsize=14)
+                plt.title(f"{model} – {k_variable}", fontsize=14) #{region_name} – 
             plt.legend(fontsize=8)
             sns.despine()
             #plt.grid(True)

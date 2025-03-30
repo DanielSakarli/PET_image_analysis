@@ -23,7 +23,6 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
-from matplotlib.patches import Circle
 import numpy as np
 from scipy import ndimage, interpolate
 from matplotlib.colors import Normalize
@@ -32,6 +31,14 @@ import concurrent.futures
 from tqdm import tqdm
 
 
+# Print version numbers
+print(f"pydicom version: {pydicom.__version__}")
+print(f"tkinter version: {tk.TkVersion}")
+print(f"matplotlib version: {matplotlib.__version__}")
+print(f"numpy version: {np.__version__}")
+print(f"scipy version: {scipy.__version__}")
+print(f"pickle version: {pickle.format_version}")
+print(f"tqdm version: {tqdm.__version__}")
 
 # Initialize global variables
 rgb_image = None
