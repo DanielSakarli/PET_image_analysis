@@ -1737,10 +1737,7 @@ def plot_recovery_coefficients(recovery_coefficients=None, sphere_sizes=None):
     '''
     true_activity_concentration = 28136.08 # calculated the activity with the measured injected_activity and the decay constant of F-18 (in Bq) at scan start
     #true_activity_concentration = 26166.28 # Calculated the theoretical activity at scan start (Daniel, 05. Nov. 2024 11:36 am) 
-    # activity_conc_at_scan_end = 25593.21
-    # take the true activtiy concentration as the average of the activity concentration at the start and end of the scan
-    # reason: can't decay-correct as usual since it is a static image and not a dynamic one
-    # true_activity_conc = ((activity_conc_at_scan_start - activity_conc_at_scan_end) / 2) + activity_conc_at_scan_end
+    
     if recovery_coefficients is None:
         # If no recovery coefficients are provided, calculate them from the SUV_N values
         # Divide all the values of the 8 arrays by true_activity_concentration

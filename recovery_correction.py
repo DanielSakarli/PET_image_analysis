@@ -817,6 +817,7 @@ def noise_vs_sphere_size():
     flag_cylindrical_RC_mean_in_background_close_to_hot_sphere = False
     # Flag that turns the spherical VOIs to cylindrical VOIs (centerline approach for iliac artery)
     flag_cylindrical_VOI = False
+    flag_calculate_ir_std_values = False
     # Center of smallest 3D sphere with a 512x512 image size
     #center = (0, 209, 270) # for the z value, the method create_3d_spherical_mask is adjusted to add the current_index (i.e. the slice number)
     #center = (0, 242, 298) # biggest sphere center position
@@ -895,18 +896,18 @@ def noise_vs_sphere_size():
     handle_recovery_coefficient_correction_coordinate_shift_spherical_VOI(masks)
     #handle_recovery_coefficient_correction_full_spherical_VOI(masks)
 
-    ir_values = get_ir_value(masks, sphere_sizes) 
-    std_values = get_std_values(image_stack, masks, sphere_sizes) #If get_ir_value is commented out: include iteration_count += 1 in get_std_values
-    
-    print(f"IR values: {ir_values}")
+    if flag_calculate_ir_std_values:
+        ir_values = get_ir_value(masks, sphere_sizes) 
+        std_values = get_std_values(image_stack, masks, sphere_sizes) #If get_ir_value is commented out: include iteration_count += 1 in get_std_values
+        print(f"IR values: {ir_values}")
     
     #true_activity_concentration = 28136.08 # calculated the activity with the measured injected_activity and the decay constant of F-18 (in Bq)
-    true_activity_concentration = 26166.28 # [Bq/mL]. Scan from the 05.11.2024, scan start: 11:36:57 am
+    #true_activity_concentration = 26166.28 # [Bq/mL]. Scan from the 05.11.2024, scan start: 11:36:57 am
 
     # take the true activtiy concentration as the average of the activity concentration at the start and end of the scan
     # reason: can't decay-correct as usual since it is a static image and not a dynamic one
     #true_activity_conc = ((activity_conc_at_scan_start - activity_conc_at_scan_end) / 2) + activity_conc_at_scan_end
-    print(f"True activity concentration: {true_activity_concentration:.2f} Bq/mL")
+    #print(f"True activity concentration: {true_activity_concentration:.2f} Bq/mL")
     plt.show()
 
 
@@ -1866,11 +1867,26 @@ def recovery_coefficient_correction_method_5():
     Get the interpolated recovery curve from the csv file and check which Recovery Coefficient the iliac artery
     diameter would have.
     """
-
+    # Ask user which phantom scan type to use
+    phantom_choice = messagebox.askyesno(
+        "Phantom Scan Type",
+        "Which phantom scan do you want to use?\n\n"
+        "Yes: Cold background scan\n"
+        "No: 1:4 activity ratio scan"
+    )
+    
+    # Set the appropriate CSV output path based on user choice
+    if phantom_choice:
+        csv_path = "./Recovery_Coefficient_Data/interpolated_rc_curve_calculated_with_4_hottest_pixels_4iterations_coldBackground.csv"
+        scan_type = "coldBackground"
+    else:
+        csv_path = "./Recovery_Coefficient_Data/interpolated_rc_curve_calculated_with_4_hottest_pixels_4iterations_1to4HotColdRatio.csv"
+        scan_type = "1to4HotColdRatio"
+    
+    print(f"Using {scan_type} phantom scan data")
     
     # Load the interpolated recovery curve from the csv file
-    csv_path = r"C:\Users\DANIE\OneDrive\FAU\Master Thesis\Project\Data\RC Correction\interpolated_rc_curve_calculated_with_c_4_hottest_pixels_4i_no_background.csv"
-    rc_curve = np.loadtxt(csv_path, delimiter=";", skiprows=1)
+    rc_curve = np.loadtxt(csv_path, delimiter=",", skiprows=1)
     x_data, y_data = rc_curve[:, 0], rc_curve[:, 1]
 
     # Get the iliac artery diameters
@@ -1915,21 +1931,23 @@ def recovery_coefficient_correction_method_5():
 
     # Show the plot to the user
     plt.show(block=False)
-    save_path = r"C:\Users\DANIE\OneDrive\FAU\Master Thesis\Project\Data\RC Correction\PSMA001"
-    png_path = os.path.join(save_path, 'PSMA001_without_background_method_5_c_4hottest_RC.png')
-    pdf_path = os.path.join(save_path, 'PSMA001_without_background_method_5_c_4hottest_RC.pdf')
-    pickle_path = os.path.join(save_path, 'PSMA001_without_background_method_5_c_4hottest_RC.pickle')
+    if False:
+        # Saving the plot
+        save_path = './Recovery_Coefficient_Data'
+        png_path = os.path.join(save_path, 'PSMA001_without_background_method_5_c_4hottest_RC.png')
+        pdf_path = os.path.join(save_path, 'PSMA001_without_background_method_5_c_4hottest_RC.pdf')
+        pickle_path = os.path.join(save_path, 'PSMA001_without_background_method_5_c_4hottest_RC.pickle')
     
-    answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here:\n{save_path}\nas\n{png_path}?")
-    if answer:
-        # Save the plot as PNG, PDF, and pickle files
-        plt.savefig(png_path)
-        plt.savefig(pdf_path)
-        with open(pickle_path, 'wb') as f:
-            pickle.dump(plt.gcf(), f)
+        answer = messagebox.askyesno("Plot Saving", f"Do you want to save the plot here:\n{save_path}\nas\n{png_path}?")
+        if answer:
+            # Save the plot as PNG, PDF, and pickle files
+            plt.savefig(png_path)
+            plt.savefig(pdf_path)
+            with open(pickle_path, 'wb') as f:
+                pickle.dump(plt.gcf(), f)
 
-    # Show the plot again to ensure it remains visible
-    plt.show()
+        # Show the plot again to ensure it remains visible
+        plt.show()
 
 
 

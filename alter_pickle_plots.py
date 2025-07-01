@@ -28,9 +28,9 @@ def open_pickle_plot(pickle_path):
 def alter_pickle_plot(pickle_path, output_pickle_path):
     # Load the old figure
     with open(pickle_path, 'rb') as f:
-        old_fig = pickle.load(f)
+        fig = pickle.load(f)
 
-    old_ax = old_fig.axes[0]  # Grab the old Axes
+    ax = fig.axes[0]  # Grab the old Axes
     if False:
         legend_entries = ["(1i, 3mm)", "(2i, 3mm)", "(3i, 3mm)", "(4i, 3mm)", "(5i, 3mm)", "(6i, 3mm)", "(7i, 3mm)", "(8i, 3mm)"]
         #legend_entries = ["(4i, 3mm)", "(4i, 5mm)", "(4i, 7mm)"]
@@ -56,11 +56,12 @@ def alter_pickle_plot(pickle_path, output_pickle_path):
         for i, (x_data, y_data) in enumerate(lines_data):
             old_ax.plot(x_data, y_data, marker='o', label=legend_entries[i])
         old_ax.legend(title="Recon-ID:", fontsize=10)
-    old_ax.set_title(r"Quantification Type Dependent Error", fontsize=14)
-    old_ax.set_xlabel("Type of Quantification", fontsize=12)
-    old_ax.set_ylabel(r"Summed Absolute Error [%]", fontsize=12)
-    legend_entries = ["(1i, 3mm)", "(2i, 3mm)", "(3i, 3mm)", "(4i, 3mm)", "(5i, 3mm)", "(6i, 3mm)", "(7i, 3mm)", "(8i, 3mm)"]
-    old_ax.legend(legend_entries, title="Recon-ID:", fontsize=10)
+    if False:
+        old_ax.set_title(r"Quantification Type Dependent Error", fontsize=14)
+        old_ax.set_xlabel("Type of Quantification", fontsize=12)
+        old_ax.set_ylabel(r"Summed Absolute Error [%]", fontsize=12)
+        legend_entries = ["(1i, 3mm)", "(2i, 3mm)", "(3i, 3mm)", "(4i, 3mm)", "(5i, 3mm)", "(6i, 3mm)", "(7i, 3mm)", "(8i, 3mm)"]
+        old_ax.legend(legend_entries, title="Recon-ID:", fontsize=10)
     if False:  
         # Anzahl der vorhandenen xticks
         xticks = old_ax.get_xticks()
@@ -181,87 +182,90 @@ def alter_pickle_plot(pickle_path, output_pickle_path):
         ax_inset.set_yticks([0, 10, 20, 30, 40, 50, 60, 70])
         ax_inset.grid(True)
         ax_inset.tick_params(axis='both', which='major', labelsize=14)
+    if False:
+        # Save the new figure to a pickle, plus PDF/PNG
+        with open(output_pickle_path, 'wb') as f:
+            pickle.dump(old_fig, f)
 
-    # Save the new figure to a pickle, plus PDF/PNG
-    with open(output_pickle_path, 'wb') as f:
-        pickle.dump(old_fig, f)
-
-    base_filename = output_pickle_path.rsplit('.', 1)[0]
-    pdf_path = f"{base_filename}.pdf"
-    png_path = f"{base_filename}.png"
-    plt.savefig(pdf_path)
-    plt.savefig(png_path)
-    plt.show()
-    # Extract existing plot data
-    #line = ax.lines[0]
-    #ax.set_ylim(1.5, 8.5)
+        base_filename = output_pickle_path.rsplit('.', 1)[0]
+        pdf_path = f"{base_filename}.pdf"
+        png_path = f"{base_filename}.png"
+        plt.savefig(pdf_path)
+        plt.savefig(png_path)
+        plt.show()
+        # Extract existing plot data
+        #line = ax.lines[0]
+        #ax.set_ylim(1.5, 8.5)
 
     
     # Include a legend with a title
     #ax.legend(title="Number of\niterations i:", loc='lower right', labels=["1i", "2i", "3i", "4i", "5i", "6i", "7i", "8i"])
 
-     
-     
-    if False:
+    # Get the first line from the axes
+    if ax.lines:
+        line = ax.lines[3]  # Get the fourth line (i.e. the RC line for 4 iterations)
         x_data, y_data = line.get_xdata(), line.get_ydata()
+    else:
+        print("No lines found in the axes")
+        return
 
-        # Interpolate the data to create a smooth curve
-        interp_func = interp1d(x_data, y_data, kind='cubic', fill_value="extrapolate")
-        x_interp = np.linspace(3, max(x_data), 500)  # Extend interpolation to start at 3 mm
-        y_interp = interp_func(x_interp)
+    # Interpolate the data to create a smooth curve
+    interp_func = interp1d(x_data, y_data, kind='cubic', fill_value="extrapolate")
+    x_interp = np.linspace(3, max(x_data), 500)  # Extend interpolation to start at 3 mm
+    y_interp = interp_func(x_interp)
 
-        # Save the interpolated x and y values to a CSV file
-        csv_output_path = "C://Users//DANIE//OneDrive//FAU//Master Thesis//Project//Data//RC Correction//interpolated_rc_curve_calculated_with_c_4_hottest_pixels_4i_with_background.csv"
-        interpolated_data = pd.DataFrame({'x': x_interp, 'y': y_interp})
-        interpolated_data.to_csv(csv_output_path, index=False)
+    # Save the interpolated x and y values to a CSV file
+    csv_output_path = "./Recovery_Coefficient_Data/interpolated_rc_curve_calculated_with_4_hottest_pixels_4iterations_coldBackground.csv"
+    interpolated_data = pd.DataFrame({'x': x_interp, 'y': y_interp})
+    interpolated_data.to_csv(csv_output_path, index=False)
 
-        # Remove the original line and re-plot only the interpolated curve
-        for line in ax.lines[:]:  # Clear all lines
-            line.remove()
-        ax.plot(x_interp, y_interp, label='Interpolated Curve', color='red')
+    # Remove the original line and re-plot only the interpolated curve
+    for line in ax.lines[:]:  # Clear all lines
+        line.remove()
+    ax.plot(x_interp, y_interp, label='Interpolated Curve', color='red')
 
-        # Plot the original data points
-        ax.scatter(x_data, y_data, color='blue', label='Original Data', zorder=5)
+    # Plot the original data points
+    ax.scatter(x_data, y_data, color='blue', label='Original Data', zorder=5)
 
-        # Define x' and y' and add vertical lines
-        x_prime = 9
-        y_prime = 12
+    # Define x' and y' and add vertical lines
+    x_prime = 9
+    y_prime = 12
 
-        # Vertical line for x' = 8 mm
-        if min(x_interp) <= x_prime <= max(x_interp):
-            y_at_x_prime = interp_func(x_prime)
-            ax.axvline(x=x_prime, color='red', linestyle='--')  # Red vertical line
-            ax.scatter([x_prime], [y_at_x_prime], color='red')  # Mark the intersection
-            ax.text(x_prime + 0.5, y_at_x_prime - 1.5, f'{y_at_x_prime:.1f}', color='red', fontsize=10)  # Annotate y-value
+    # Vertical line for x' = 8 mm
+    if min(x_interp) <= x_prime <= max(x_interp):
+        y_at_x_prime = interp_func(x_prime)
+        ax.axvline(x=x_prime, color='red', linestyle='--')  # Red vertical line
+        ax.scatter([x_prime], [y_at_x_prime], color='red')  # Mark the intersection
+        ax.text(x_prime + 0.5, y_at_x_prime - 1.5, f'{y_at_x_prime:.1f}', color='red', fontsize=10)  # Annotate y-value
 
-        # Vertical line for y' = 12 mm
-        if min(x_interp) <= y_prime <= max(x_interp):
-            y_at_y_prime = interp_func(y_prime)
-            ax.axvline(x=y_prime, color='red', linestyle='--')  # Red vertical line
-            ax.scatter([y_prime], [y_at_y_prime], color='red')  # Mark the intersection
-            ax.text(y_prime + 0.5, y_at_y_prime - 1.5, f'{y_at_y_prime:.1f}', color='red', fontsize=10)  # Annotate y-value
+    # Vertical line for y' = 12 mm
+    if min(x_interp) <= y_prime <= max(x_interp):
+        y_at_y_prime = interp_func(y_prime)
+        ax.axvline(x=y_prime, color='red', linestyle='--')  # Red vertical line
+        ax.scatter([y_prime], [y_at_y_prime], color='red')  # Mark the intersection
+        ax.text(y_prime + 0.5, y_at_y_prime - 1.5, f'{y_at_y_prime:.1f}', color='red', fontsize=10)  # Annotate y-value
 
-        # Add x' and y' ticks on the x-axis
-        original_xticks = list(ax.get_xticks())  # Get the original ticks
-        new_xticks = sorted(original_xticks + [x_prime, y_prime])  # Add x' and y' to ticks
-        ax.set_xticks(new_xticks)  # Set the updated ticks
+    # Add x' and y' ticks on the x-axis
+    original_xticks = list(ax.get_xticks())  # Get the original ticks
+    new_xticks = sorted(original_xticks + [x_prime, y_prime])  # Add x' and y' to ticks
+    ax.set_xticks(new_xticks)  # Set the updated ticks
 
-        # Create tick labels, making x' and y' red
-        xtick_labels = []
-        for tick in new_xticks:
-            if tick == x_prime:
-                xtick_labels.append(f"x'")  # Label for x'
-            elif tick == y_prime:
-                xtick_labels.append(f"y'")  # Label for y'
-            else:
-                xtick_labels.append(f"{int(tick)}")  # Keep other ticks as integers
+    # Create tick labels, making x' and y' red
+    xtick_labels = []
+    for tick in new_xticks:
+        if tick == x_prime:
+            xtick_labels.append(f"x'")  # Label for x'
+        elif tick == y_prime:
+            xtick_labels.append(f"y'")  # Label for y'
+        else:
+            xtick_labels.append(f"{int(tick)}")  # Keep other ticks as integers
 
-        # Set the tick labels with red color for x' and y'
-        for label, tick in zip(ax.set_xticklabels(xtick_labels), new_xticks):
-            if tick == x_prime or tick == y_prime:
-                label.set_color('red')  # Make x' and y' labels red
-            else:
-                label.set_color('black')  # Keep other labels black
+    # Set the tick labels with red color for x' and y'
+    for label, tick in zip(ax.set_xticklabels(xtick_labels), new_xticks):
+        if tick == x_prime or tick == y_prime:
+            label.set_color('red')  # Make x' and y' labels red
+        else:
+            label.set_color('black')  # Keep other labels black
 
     # Limit the x-axis range
     #ax.set_xlim(5, 40)
